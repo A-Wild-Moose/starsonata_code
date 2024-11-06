@@ -42,8 +42,16 @@ impl ScanData {
 
         for cap in cap_exe {
             let (_, [item, count]) = cap.extract();
-            self.item.push(item.to_string());
-            self.count.push(count.parse::<i64>().unwrap());
+            match item {
+                "Ruins" => {
+                    self.item.push(format!("Ruins of {}", count).to_string());
+                    self.count.push(0);
+                }
+                _ => {
+                    self.item.push(item.to_string());
+                    self.count.push(count.replace(",", "").parse::<i64>().unwrap());
+                }
+            }
             n = n + 1;
         }
 
@@ -79,14 +87,14 @@ fn parse_scan(a: &str, galaxy: &str, scan_data: &mut ScanData) {
     let scan = a.get(i1..i2).unwrap();
 
     static RE_META: Lazy<Regex> = Lazy::new(|| Regex::new(
-        r"Scan: \[(?<orbiter>[[:word:] ]*) \((?<orbitee>[[:word:] \(\)]*)\)\] (?<gravity>[[:word:]]*) Gravity, (?<temp>[[:word:]]*), (?<climate>[[:word:]]*). Base Slots: (?<slots>\d)\.|\[\[([[:word:] ]*)?\]\]"
+        r"Scan: \[(?<orbiter>[[:word:] ']*) \((?<orbitee>[[:word:] '\(\)]*)\)\] (?<gravity>[[:word:]]*) Gravity, (?<temp>[[:word:]]*), (?<climate>[[:word:]]*). Base Slots: (?<slots>\d)\.|\[\[([[:word:] ]*)?\]\]"
     ).unwrap());
 
     let caps = RE_META.captures(scan).unwrap();
 
     // TODO: need to add ruins
     static RE_EXTRACTORS: Lazy<Regex> = Lazy::new(|| Regex::new(
-        r"\[\[(?<link>[\w\s]*)\]\] \((?<ext>\d{1,3})\)"
+        r"\[\[(?<link>[\w\s]*)\]\] \((?<ext>\d{1,3})\)|(Ruins) of (?<ruins>[[:word:] ']*)[\.\,]|(Colony), population: (?<pop>[\d,]*) "
     ).unwrap());
 
     // update the data store
@@ -140,7 +148,7 @@ fn main() {
     const E3: &str = "E\0\u{3}\u{c}\rT@\02\u{6}��3��\"\n�_j\u{b}����\u{17}Entering Iq'bana.\0\0r�W�\"";
     println!("{}", parse_entering(E3));
 
-    const DATA: &str = "E\0\u{3}\u{c}\rT@\02\u{6}��3��\"\n�_j\u{b}����\u{17}�\u{5}�\0��P\u{18}\u{1}���\0\0\u{4}\0\u{c}�1�\u{5} \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@ \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@�\0\u{10}\0Scan: [Arabian Nights (Main Sequence Sun (O2V class))] Heavy Gravity, Blistering, Terran. Base Slots: 4. Detected resources: A bunch of [[Metals]] (10), A bunch of [[Silicon]] (13), A bunch of [[Nuclear Waste]] (14).\0\0�\0o-�";
+    const DATA: &str = "E\0\u{3}\u{c}\rT@\02\u{6}��3��\"\n�_j\u{b}����\u{17}�\u{5}�\0��P\u{18}\u{1}���\0\0\u{4}\0\u{c}�1�\u{5} \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@ \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@�\0\u{10}\0Scan: [Arabian Nights (Main Sequence Sun (O2V class))] Heavy Gravity, Blistering, Terran. Base Slots: 4.  -- Colony, population: 573,819 Detected resources: A bunch of [[Metals]] (10), A bunch of [[Silicon]] (13), Ruins of UrQa, A bunch of [[Nuclear Waste]] (14).\0\0�\0o-�";
 
     let mut scan_data = ScanData::new();
 
@@ -157,7 +165,7 @@ fn main() {
             Column::new("Climate".into(), scan_data.climate),
             Column::new("Base Slots".into(), scan_data.slots),
             Column::new("Resource".into(), scan_data.item),
-            Column::new("Slots/Value".into(), scan_data.count)
+            Column::new("Extractors/Population".into(), scan_data.count)
         ]
     ).unwrap();
 
