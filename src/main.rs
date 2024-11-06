@@ -1,4 +1,5 @@
 // use std::net::{IpAddr, Ipv4Addr};
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use pcap::{Device, Capture};
 use regex::{Regex, Captures, CaptureMatches};
 use once_cell::sync::Lazy;
@@ -68,16 +69,16 @@ impl ScanData {
 }
 
 
-fn parse_entering(a: &str) -> &str {
+fn parse_entering(a: &str) -> String {
     let i1 = a.find("Entering").unwrap();
-    let mut i2 = i1 + 1;
-    if a.contains("Galaxy owned") {
-        i2 = i1 + a.get(i1..a.len()).unwrap().find(". Galaxy owned").unwrap();
+    
+    let i2 = if a.contains("Galaxy owned") {
+        i1 + a.get(i1..a.len()).unwrap().find(". Galaxy owned").unwrap()
     } else {
-        i2 = i1 + a.get(i1..a.len()).unwrap().find("\0").unwrap() - 1;
-    }
+        i1 + a.get(i1..a.len()).unwrap().find("\0").unwrap() - 1
+    };
 
-    a.get(i1..i2).unwrap()
+    a.get(i1..i2).unwrap().to_string()
 }
 
 fn parse_scan(a: &str, galaxy: &str, scan_data: &mut ScanData) {
@@ -102,57 +103,49 @@ fn parse_scan(a: &str, galaxy: &str, scan_data: &mut ScanData) {
 }
 
 fn main() {
+
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
+
     
-    // let mut main_device = Device::lookup().unwrap().unwrap();
-    // let devices = Device::list().unwrap();
+    let mut main_device = Device::lookup().unwrap().unwrap();
+    let devices = Device::list().unwrap();
 
-    // println!("testing");
+    // println!("{}", main_device.name);
 
-    // // println!("{}", main_device.name);
+    for dev in devices.iter(){
+        // println!("{}, {}", dev.name, dev.desc.clone().unwrap());
+        if dev.desc.clone().unwrap().contains("Mullvad Tunnel") {
+            main_device = dev.clone();
+        }
+    }
 
-    // for dev in devices.iter(){
-    //     // println!("{}, {}", dev.name, dev.desc.clone().unwrap());
-    //     if dev.desc.clone().unwrap().contains("Mullvad Tunnel") {
-    //         main_device = dev.clone();
-    //     }
-    // }
-
-
-    // let mut cap = Capture::from_device(main_device).unwrap().open().unwrap();
+    // capture device
+    let mut cap = Capture::from_device(main_device).unwrap().open().unwrap();
     
-    // let _ = cap.filter(
-    //     "src host 51.222.248.34", true
-    // );
+    // set the filters on the packat reading
+    let _ = cap.filter(
+        "src host 51.222.248.34", true
+    );
 
-    // let mut i = 0;
-    // while i < 50 {
-    //     let packet = cap.next_packet().unwrap();
-    //     let data = String::from_utf8_lossy(packet.data);
-    //     if data.contains("Entering "){
-    //         let line = parse_entering(&data);
-    //         println!("{}", line);
-    //     }
-    //     println!("received packet! {:?}", String::from_utf8_lossy(packet.data));
-    //     i = i + 1;
-    //     // received packet! "E\0\u{3}\u{c}\rT@\02\u{6}��3��\"\n�_j\u{b}����\u{17}�\u{5}�\0��P\u{18}\u{1}���\0\0\u{4}\0\u{c}�1�\u{5} 
-    //     // \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@ \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@�\0\u{10}
-    //     // \0Scan: [Arabian Nights (Main Sequence Sun (O2V class))] Heavy Gravity, Blistering, Terran. Base Slots: 4. Detected resources: A bunch of [[Metals]] (10), A bunch of [[Silicon]] (13), A bunch of [[Nuclear Waste]] (14).\0\0�\0o-�\0\0Scan: [Arabian Nights (Main Sequence Sun (O2V class))] Heavy Gravity, Blistering, Terran. Base Slots: 4. Detected resources: A bunch of [[Metals]] (10), A bunch of [[Silicon]] (13), A bunch of [[Nuclear Waste]] (14).\0\0333333�?�2\0\0'\0 \0\0Scanner.wav\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\u{15}\0!�W�\u{6}r(V�\u{5ee}�@\0�D�\u{1b}܃�\0\u{15}\0!�W�\u{6}r(V�\u{5ee}�@\0�D�\u{1b}܃�\0\u{15}\0!�W�\u{6}��C���@\0�D�\u{1b}܃�\0\u{15}\0!�W�\u{6}��C���@\0�D�\u{1b}܃�\0?\0\u{b}���\u{8}�\u{1b}Nf�+���K�Zmә@���`�\u{10}���&��,\r�?��n!C�\u{3}�\nᮉ�\0h@\0\0\0\0\0\0\0\0\0\0\0"
-    // }
-
-    const E1: &str = "E\0\u{3}\u{c}\rT@\02\u{6}��3��\"\n�_j\u{b}����\u{17}Entering Sol. Galaxy owned by Earthforce.\0\0r�W�\"";
-    println!("{}", parse_entering(E1));
-
-    const E2: &str = "E\0\u{3}\u{c}\rT@\02\u{6}��3��\"\n�_j\u{b}����\u{17}Entering Sol 4.1298.\0\0r�W�\"";
-    println!("{}", parse_entering(E2));
-
-    const E3: &str = "E\0\u{3}\u{c}\rT@\02\u{6}��3��\"\n�_j\u{b}����\u{17}Entering Iq'bana.\0\0r�W�\"";
-    println!("{}", parse_entering(E3));
-
-    const DATA: &str = "E\0\u{3}\u{c}\rT@\02\u{6}��3��\"\n�_j\u{b}����\u{17}�\u{5}�\0��P\u{18}\u{1}���\0\0\u{4}\0\u{c}�1�\u{5} \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@ \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@�\0\u{10}\0Scan: [Arabian Nights (Main Sequence Sun (O2V class))] Heavy Gravity, Blistering, Terran. Base Slots: 4.  -- Colony, population: 573,819 Detected resources: A bunch of [[Metals]] (10), A bunch of [[Silicon]] (13), Ruins of UrQa, A bunch of [[Nuclear Waste]] (14), Loads of Biogeneticist's Plagrounds (99).\0\0�\0o-�";
-
+    // allocate scan data storage
     let mut scan_data = ScanData::new();
 
-    parse_scan(DATA, &"Sol", &mut scan_data);
+    let mut galaxy = "".to_string();
+    while running.load(Ordering::SeqCst) {
+        let packet = cap.next_packet().unwrap();
+        let data = String::from_utf8_lossy(packet.data);
+        if data.contains("Entering "){
+            galaxy = parse_entering(&data);
+        }
+        if data.contains("Scan:"){
+            parse_scan(&data, &*galaxy, &mut scan_data);
+        }
+    }
     
     // create a polars dataframe
     let df = DataFrame::new(
