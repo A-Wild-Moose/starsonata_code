@@ -2,36 +2,42 @@
 use pcap::{Device, Capture};
 use regex::{Regex, Captures, CaptureMatches};
 use once_cell::sync::Lazy;
+use polars::{frame::{DataFrame, column::Column}};
 
 // liberty_starsonata_com = IpAddr::V4(Ipv4Addr::new(51, 222, 248, 34));
 
+
 struct ScanData {
     // Metadata
-    orbitee: Vec<String>;
-    orbiter: Vec<String>;
-    gravity: Vec<String>;
-    temp: Vec<String>;
-    climate: Vec<String>;
-    slots: Vec<i64>;
+    galaxy: Vec<String>,
+    orbitee: Vec<String>,
+    orbiter: Vec<String>,
+    gravity: Vec<String>,
+    temp: Vec<String>,
+    climate: Vec<String>,
+    slots: Vec<i64>,
     // Extractor slots, ruins, etc
-    item: Vec<String>;
-    count: Vec<i64>;
+    item: Vec<String>,
+    count: Vec<i64>
 }
 
 
 impl ScanData {
-    fn new(&mut self) {
-        self.orbitee = Vec::new();
-        self.orbiter = Vec::new();
-        self.gravity = Vec::new();
-        self.temp = Vec::new();
-        self.climate = Vec::new();
-        self.slots = Vec::new();
-        self.item = Vec::new();
-        self.count = Vec::new();
+    fn new() -> Self{
+        Self {
+            galaxy: Vec::new(),
+            orbitee: Vec::new(),
+            orbiter: Vec::new(),
+            gravity: Vec::new(),
+            temp: Vec::new(),
+            climate: Vec::new(),
+            slots: Vec::new(),
+            item: Vec::new(),
+            count: Vec::new()
+        }
     }
 
-    fn add_scan(&mut self, cap_meta: Captures, cap_exe: CaptureMatches) {
+    fn add_scan(&mut self, galaxy: &str, cap_meta: Captures, cap_exe: CaptureMatches) {
         let mut n = 0;
 
         for cap in cap_exe {
@@ -40,6 +46,16 @@ impl ScanData {
             self.count.push(count.parse::<i64>().unwrap());
             n = n + 1;
         }
+
+        // set all the metadata
+        self.galaxy.append(&mut vec![galaxy.to_string(); n]);
+        self.orbiter.append(&mut vec![cap_meta.name("orbiter").unwrap().as_str().to_string(); n]);
+        self.orbitee.append(&mut vec![cap_meta.name("orbitee").unwrap().as_str().to_string(); n]);
+        self.gravity.append(&mut vec![cap_meta.name("gravity").unwrap().as_str().to_string(); n]);
+        self.temp.append(&mut vec![cap_meta.name("temp").unwrap().as_str().to_string(); n]);
+        self.climate.append(&mut vec![cap_meta.name("climate").unwrap().as_str().to_string(); n]);
+        self.slots.append(&mut vec![cap_meta.name("slots").unwrap().as_str().parse::<i64>().unwrap(); n]);
+
     }
 }
 
@@ -56,7 +72,7 @@ fn parse_entering(a: &str) -> &str {
     a.get(i1..i2).unwrap()
 }
 
-fn parse_scan(a: &str, scan_data: &mut ScanData) {
+fn parse_scan(a: &str, galaxy: &str, scan_data: &mut ScanData) {
     let i1 = a.find("Scan: ").unwrap();
     let i2 = i1 + a.get(i1..a.len()).unwrap().find("\0").unwrap();
 
@@ -68,27 +84,13 @@ fn parse_scan(a: &str, scan_data: &mut ScanData) {
 
     let caps = RE_META.captures(scan).unwrap();
 
-    // orbiter.push(caps.name("orbiter").map_or("".to_string(), |m| m.as_str().to_string()));
-
-    // println!("{}", &caps["orbiter"]);
-    // println!("{}", &caps["orbitee"]);
-    // println!("{}", &caps["gravity"]);
-    // println!("{}", &caps["temp"]);
-    // println!("{}", &caps["climate"]);
-    // println!("{}", &caps["slots"]);
-
-    // println!("{}", caps.len());
-    // println!("{}", &caps[6]);
-
     // TODO: need to add ruins
     static RE_EXTRACTORS: Lazy<Regex> = Lazy::new(|| Regex::new(
         r"\[\[(?<link>[\w\s]*)\]\] \((?<ext>\d{1,3})\)"
     ).unwrap());
 
-    for cap in RE_EXTRACTORS.captures_iter(scan) {
-        let (_, [c1, c2]) = cap.extract();
-        dbg!(c1, c2);
-    }
+    // update the data store
+    scan_data.add_scan(galaxy, caps, RE_EXTRACTORS.captures_iter(scan));
 }
 
 fn main() {
@@ -140,17 +142,24 @@ fn main() {
 
     const DATA: &str = "E\0\u{3}\u{c}\rT@\02\u{6}��3��\"\n�_j\u{b}����\u{17}�\u{5}�\0��P\u{18}\u{1}���\0\0\u{4}\0\u{c}�1�\u{5} \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@ \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@�\0\u{10}\0Scan: [Arabian Nights (Main Sequence Sun (O2V class))] Heavy Gravity, Blistering, Terran. Base Slots: 4. Detected resources: A bunch of [[Metals]] (10), A bunch of [[Silicon]] (13), A bunch of [[Nuclear Waste]] (14).\0\0�\0o-�";
 
-    let mut orbitee: Vec<String> = Vec::new();
-    let mut orbiter: Vec<String> = Vec::new();
-    let mut gravity: Vec<String> = Vec::new();
-    let mut temp: Vec<String> = Vec::new();
-    let mut climate: Vec<String> = Vec::new();
-    let mut slots: Vec<I64> = Vec::new();
+    let mut scan_data = ScanData::new();
 
-    println!("{}", &caps["orbitee"]);
-    println!("{}", &caps["gravity"]);
-    println!("{}", &caps["temp"]);
-    println!("{}", &caps["climate"]);
-    println!("{}", &caps["slots"]);
-    let res = parse_scan(DATA, &mut orbitee);
+    parse_scan(DATA, &"Sol", &mut scan_data);
+    
+    // create a polars dataframe
+    let df = DataFrame::new(
+        vec![
+            Column::new("Galaxy".into(), scan_data.galaxy),
+            Column::new("Solar Body".into(), scan_data.orbiter),
+            Column::new("Parent Body".into(), scan_data.orbitee),
+            Column::new("Gravity".into(), scan_data.gravity),
+            Column::new("Temp".into(), scan_data.temp),
+            Column::new("Climate".into(), scan_data.climate),
+            Column::new("Base Slots".into(), scan_data.slots),
+            Column::new("Resource".into(), scan_data.item),
+            Column::new("Slots/Value".into(), scan_data.count)
+        ]
+    ).unwrap();
+
+    println!("{:?}", df);
 }
