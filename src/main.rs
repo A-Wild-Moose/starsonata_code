@@ -94,7 +94,7 @@ fn parse_scan(a: &str, galaxy: &str, scan_data: &mut ScanData) {
 
     // TODO: need to add ruins
     static RE_EXTRACTORS: Lazy<Regex> = Lazy::new(|| Regex::new(
-        r"\[\[(?<link>[\w\s]*)\]\] \((?<ext>\d{1,3})\)|(Ruins) of (?<ruins>[[:word:] ']*)[\.\,]|(Colony), population: (?<pop>[\d,]*) "
+        r"\[\[(?<link>[\w\s]*)\]\] \((?<ext>\d{1,3})\)|(Ruins) of (?<ruins>[[:word:] ']*)[\.\,]|(Colony), population: (?<pop>[\d,]*) | of ([[:word:] ']*) \((\d{1,3})\)"
     ).unwrap());
 
     // update the data store
@@ -148,7 +148,7 @@ fn main() {
     const E3: &str = "E\0\u{3}\u{c}\rT@\02\u{6}��3��\"\n�_j\u{b}����\u{17}Entering Iq'bana.\0\0r�W�\"";
     println!("{}", parse_entering(E3));
 
-    const DATA: &str = "E\0\u{3}\u{c}\rT@\02\u{6}��3��\"\n�_j\u{b}����\u{17}�\u{5}�\0��P\u{18}\u{1}���\0\0\u{4}\0\u{c}�1�\u{5} \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@ \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@�\0\u{10}\0Scan: [Arabian Nights (Main Sequence Sun (O2V class))] Heavy Gravity, Blistering, Terran. Base Slots: 4.  -- Colony, population: 573,819 Detected resources: A bunch of [[Metals]] (10), A bunch of [[Silicon]] (13), Ruins of UrQa, A bunch of [[Nuclear Waste]] (14).\0\0�\0o-�";
+    const DATA: &str = "E\0\u{3}\u{c}\rT@\02\u{6}��3��\"\n�_j\u{b}����\u{17}�\u{5}�\0��P\u{18}\u{1}���\0\0\u{4}\0\u{c}�1�\u{5} \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@ \0r�W�\u{6}�ڙ\0\0\0\0\0\0\0\0\0\0\0\0\0\0��@\0\0\0\0\0@�@�\0\u{10}\0Scan: [Arabian Nights (Main Sequence Sun (O2V class))] Heavy Gravity, Blistering, Terran. Base Slots: 4.  -- Colony, population: 573,819 Detected resources: A bunch of [[Metals]] (10), A bunch of [[Silicon]] (13), Ruins of UrQa, A bunch of [[Nuclear Waste]] (14), Loads of Biogeneticist's Plagrounds (99).\0\0�\0o-�";
 
     let mut scan_data = ScanData::new();
 
