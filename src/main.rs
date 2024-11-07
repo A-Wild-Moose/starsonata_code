@@ -60,9 +60,20 @@ impl ScanData {
         self.galaxy.append(&mut vec![galaxy.to_string(); n]);
         self.orbiter.append(&mut vec![cap_meta.name("orbiter").unwrap().as_str().to_string(); n]);
         self.orbitee.append(&mut vec![cap_meta.name("orbitee").unwrap().as_str().to_string(); n]);
-        self.gravity.append(&mut vec![cap_meta.name("gravity").unwrap_or("").as_str().to_string(); n]);
-        self.temp.append(&mut vec![cap_meta.name("temp").unwrap_or("").as_str().to_string(); n]);
-        self.climate.append(&mut vec![cap_meta.name("climate").unwrap_or("").as_str().to_string(); n]);
+
+        match cap_meta.name("gravity"){
+            None => {
+                self.gravity.append(&mut vec!["".to_string(); n]);
+                self.temp.append(&mut vec!["".to_string(); n]);
+                self.climate.append(&mut vec!["".to_string(); n]);
+            }
+            _ => {
+                self.gravity.append(&mut vec![cap_meta.name("gravity").unwrap().as_str().to_string(); n]);
+                self.temp.append(&mut vec![cap_meta.name("temp").unwrap().as_str().to_string(); n]);
+                self.climate.append(&mut vec![cap_meta.name("climate").unwrap().as_str().to_string(); n]);
+            }
+        }
+
         self.slots.append(&mut vec![cap_meta.name("slots").unwrap().as_str().parse::<i64>().unwrap(); n]);
 
     }
@@ -89,11 +100,7 @@ fn parse_scan(a: &str, galaxy: &str, scan_data: &mut ScanData) {
 
     static RE_META: Lazy<Regex> = Lazy::new(|| Regex::new(
         // account for moons which have no suitability modifiers
-        concat!(
-            r"Scan: \[(?<orbiter>[[:word:] ']*) \((?<orbitee>[[:word:] '\(\)]*)\)\] (?<gravity>[[:word:]]*) Gravity, (?<temp>[[:word:]]*), (?<climate>[[:word:]]*). Base Slots: (?<slots>\d)\.|\[\[([[:word:] ]*)?\]\]",
-            r"|",
-            r"Scan: \[(?<orbiter>[[:word:] ']*) \((?<orbitee>[[:word:] '\(\)]*)\)\] Base Slots: (?<slots>\d)\.|\[\[([[:word:] ]*)?\]\]"
-        )
+        r"Scan: \[(?<orbiter>[[:word:] ']*) \((?<orbitee>[[:word:] '\(\)]*)\)\] (?<gravity>[[:word:]]* Gravity, )?(?<temp>[[:word:]]*, )?(?<climate>[[:word:]]*\.)? Base Slots: (?<slots>\d)\.|\[\[([[:word:] ]*)?\]\]"
     ).unwrap());
 
     let caps = RE_META.captures(scan).unwrap();
@@ -151,7 +158,7 @@ fn main() {
             parse_scan(&data, &*galaxy, &mut scan_data);
         }
     }
-    
+
     // create a polars dataframe
     let df = DataFrame::new(
         vec![
