@@ -4,6 +4,7 @@ use pcap::{Device, Capture};
 use regex::{Regex, Captures, CaptureMatches};
 use once_cell::sync::Lazy;
 use polars::{frame::{DataFrame, column::Column}};
+use polars::prelude::{SerWriter, CsvWriter};
 
 // liberty_starsonata_com = IpAddr::V4(Ipv4Addr::new(51, 222, 248, 34));
 
@@ -81,7 +82,7 @@ impl ScanData {
 
 
 fn parse_entering(a: &str) -> String {
-    let i1 = a.find("Entering").unwrap();
+    let i1 = a.find("Entering").unwrap() + 9;  // find matches start, have to match end
     
     let i2 = if a.contains("Galaxy owned") {
         i1 + a.get(i1..a.len()).unwrap().find(". Galaxy owned").unwrap()
@@ -160,7 +161,7 @@ fn main() {
     }
 
     // create a polars dataframe
-    let df = DataFrame::new(
+    let mut df = DataFrame::new(
         vec![
             Column::new("Galaxy".into(), scan_data.galaxy),
             Column::new("Solar Body".into(), scan_data.orbiter),
@@ -173,6 +174,10 @@ fn main() {
             Column::new("Extractors/Population".into(), scan_data.count)
         ]
     ).unwrap();
+
+    let mut file = std::fs::File::create("scans/temp.csv").unwrap();
+
+    CsvWriter::new(&mut file).finish(&mut df).unwrap();
 
     println!("{:?}", df);
 }
