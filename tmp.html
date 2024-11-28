@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content Type" content="text/html; charset-iso-8859-1">
+        <META http-equiv="CACHE-CONTROL" content="NO-CACHE">
+            <title>GALAXY</title>
+
+            <style type="text/css">
+                .xsamounttip
+                {
+                    display: none;
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    z-index: 2;
+                    font: normal 8pt sans-serif;
+                    padding: 2px;
+                    border: solid 1px;
+                    width: 50px;
+                    background-color: #2F4F4F;
+                    white-space: nowrap;
+                }
+                .xstooltip
+                {
+                    display: none;
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    z-index: 2;
+                    font: normal 8pt sans-serif;
+                    padding: 3px;
+                    border: solid 1px;
+                    width: 180px;
+                    background-color: #2F4F4F;
+                    white-space: nowrap;
+                }
+                .xstooltiphead
+                {
+                    text-align: center;
+                }
+                .xsamounttip
+                {
+                    text-align: center;
+                }
+                table {
+                    border-left: 1px solid grey;
+                    border-right: 1px solid grey;
+                    border-bottom: 1px solid grey;
+                }
+                th {
+                    font-size: 10px;
+                    border-top: 1px solid grey;
+                }
+                td, body {
+                    background: #333;
+                    font-family: verdana, sans-serif;
+                    font-size: 10px;
+                    color: #fff;
+                }
+                tr.p td {
+                    border-top: 1px solid grey;
+                }
+                td.m {
+                    border-top: 1px solid grey;
+                    padding-left: 20px;
+                }
+                td.m2 {
+                    border-top: 1px solid grey;
+                }
+                DIV.suit:hover {
+                    color: red;
+                }
+                SPAN.a {
+                    color: #A9A9A9;
+                    font-size: 9px;
+                }
+                SPAN.a:hover {
+                    color: #bbb;
+                }
+                SPAN.c {
+                    color: #3CB371;
+                    font-weight: bold;
+                }
+                A {
+                    color: #6495ED;
+                }
+            </style>
+    </head>
+    <body>
+        <script type="text/javascript" language="JavaScript1.2">
+            var planets = new Array();
+            planets['planet1'] = 'Heavy Blistering Terran -- 0.75';
+            planets['planet2'] = 'Low Temperate Terran -- 1.15';
+
+            function myTipHide()
+            {
+                document.getElementById('tooltip').style.display='none';
+            }
+            function myTip(thing)
+            {
+                var off = document.getElementById(thing);
+                if (off.offsetParent) {
+                    var curleft = 0;
+                    var curtop = 0;
+                    while (off) {
+                        curleft += off.offsetLeft;
+                        curtop += off.offsetTop;
+                        off = off.offsetParent;
+                    }
+                }
+                document.getElementById('tooltip').style.top = curtop + 15 + 'px';
+                document.getElementById('tooltip').style.left = curleft + 'px';
+                
+                divtitle = document.getElementById('tooltiphead');
+                divtitle.innerHTML = planets[thing];
+                thediv = document.getElementById('tooltip');
+                if (thediv.style.display != 'block') {
+                    thediv.style.display = 'block';
+                } else {
+                    thediv.style.display = 'none';
+                }
+            }
+            function myAmountTipHide()
+            {
+                documnet.getElementById('amounttip').style.display = 'none';
+            }
+
+            function myAmountTip(thing, text)
+            {
+                var off = document.getElementById(thing);
+                if (off.offsetParent) {
+                    var curleft = 0;
+                    var curtop = 0;
+                    while (off) {
+                        curleft += off.offsetLeft;
+                        curtop += off.offsetTop;
+                        off = off.offsetParent;
+                    }
+                }
+                document.getElementById('amounttip').style.top = curtop + 15 + 'px';
+                document.getElementById('amounttip').style.left = curleft + 'px';
+                thediv = document.getElementById('amounttip');
+                thediv.innerHTML = text;
+                if (thediv.style.display != 'block') {
+                    thediv.style.display = 'block';
+                } else {
+                    thediv.style.display = 'none';
+                }
+            }
+
+            function myHLOn(name)
+            {
+                var e = document.getElementById(name);
+                for (var i=0; i < e.length; i++) {
+                    e[i].style.textDecoration = 'underline';
+                }
+            }
+
+            function myHLOff(name)
+            {
+                var e = document.getElementById(name);
+                for (var i=0; i < e.length; i++){
+                    e[i].style.textDecoration = 'none';
+                }
+            }
+        </script>
+
+        <h1>NAME</h1>
+        <table cellpadding="3" cellspacing="0" border="0">
+            <tr class="p"><td colspan=2><br> P: [planet1]</td><td><br><div style="width: 10px; white-space: nowrap;" id="planet1" class="suit" onMouseOver="myTip('planet1');" onMouseOut="myTipHide();">Heavy Blistering Noxious 175%</div></td></tr>
+        </table>
+
+
+    </body>
+</html>
