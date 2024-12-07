@@ -8,9 +8,9 @@ use std::io::Write;
 
 fn parse_dg(a: &str) -> String {
     static RE_DG: Lazy<Regex> = Lazy::new(|| Regex::new(
-        r"DG (?<dg_gal>[[:word:] ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z])"
+        r"DG (?<dg_gal>[[:word:] ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)"
     ).unwrap());
-    let caps = RE_DG.captures(a).unwrap();
+    let caps = RE_DG.captures(a).expect("Unable to parse the DG name");
 
     let dg_gal = caps.name("dg_gal").unwrap().as_str();
     let dg_level = caps.name("dg_level").unwrap().as_str();
@@ -22,7 +22,7 @@ fn parse_dg(a: &str) -> String {
 
 fn parse_ships(a: &str) {
     static RE_SHIPS: Lazy<Regex> = Lazy::new(|| Regex::new(
-        r"(?<ship>[[:word:] ]*)\u{0000}(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
+        r"DX[0-9]{1,5}\u0000.*?(?<ship>[[:word:] ]*)\u{0000}(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
         // r"(?<ship>[[:word:] ]{5,11})"
     ).unwrap());
     
@@ -58,15 +58,19 @@ fn main() {
         "src host 51.222.248.34", true
     );
 
-    // let mut f = File::create("packet_dump.log").expect("unable to create file");
+    let mut f = File::create("packet_dump.log").expect("unable to create file");
 
     let mut curr_dg: String = "".to_string();
 
     while running.load(Ordering::SeqCst) {
         let packet = cap.next_packet().unwrap();
         let data = String::from_utf8_lossy(packet.data);
-        // f.write_all(data.as_bytes()).expect("unable to write to file");
-        if data.contains(std::str::from_utf8(&vec![5, 68, 71, 32]).unwrap()) { // ENQ/DG /
+        f.write_all(data.as_bytes()).expect("unable to write to file");
+        // if data.contains(std::str::from_utf8(&vec![5, 68, 71, 32]).unwrap()) { // ENQ/DG /
+        static RE_META: Lazy<Regex> = Lazy::new(|| Regex::new(
+            r"[\x00-\x1F]DG "
+        ).unwrap());
+        if RE_META.is_match(&data) {
             curr_dg = parse_dg(&data);
         }
         if curr_dg != "" {
