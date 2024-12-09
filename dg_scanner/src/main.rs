@@ -58,18 +58,13 @@ fn main() {
         "src host 51.222.248.34", true
     );
 
-    let mut f = File::create("packet_dump.log").expect("unable to create file");
-
     let mut curr_dg: String = "".to_string();
 
     while running.load(Ordering::SeqCst) {
         let packet = cap.next_packet().unwrap();
         let data = String::from_utf8_lossy(packet.data);
-        f.write_all(data.as_bytes()).expect("unable to write to file");
-        // if data.contains(std::str::from_utf8(&vec![5, 68, 71, 32]).unwrap()) { // ENQ/DG /
-        static RE_META: Lazy<Regex> = Lazy::new(|| Regex::new(
-            r"[\x00-\x1F]DG "
-        ).unwrap());
+
+        static RE_META: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\x00-\x1F]DG ").unwrap());
         if RE_META.is_match(&data) {
             curr_dg = parse_dg(&data);
         }
