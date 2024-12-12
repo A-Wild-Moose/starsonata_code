@@ -1,10 +1,72 @@
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::fs;
 use pcap::{Device, Capture};
 use regex::{Regex, Captures, CaptureMatches};
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
+use serde_json::Result;
 
-use std::fs::File;
-use std::io::Write;
+#[derive(Serialize, Deserialize)]
+struct DgData {
+    id: Vec<String>
+    galaxy: Vec<String>
+    level: Vec<String>
+    boss: Vec<String>
+    guards: Vec<String>
+    count: Vec<i64>
+}
+
+impl DgData {
+    fn new() -> Self {
+        Self {
+            id: Vec::new(),
+            galaxy: Vec::new(),
+            level: Vec::new(),
+            boss: Vec::new(),
+            guards: Vec::new(),
+            count: Vec::new()
+        }
+    }
+
+    fn to_polars(&self) -> DataFrame {
+        DataFrame::new(
+            vec![
+                Column::new("id".into(), self.id.clone()),
+                Column::new("galaxy".into(), self.galaxy.clone()),
+                Column::new("level".into(), self.level.clone()),
+                Column::new("boss".into(), self.boss.clone()),
+                Column::new("guards".into(), self.guards.clone()),
+                Column::new("count".into(), self.count.clone())
+            ]
+        ).unwrap()
+    }
+
+    fn from_polars(&mut self, a: &str) {
+        let df = CsvReadOptions::default()
+            .with_has_header(true)
+            .try_into_reader_with_file_path(Some(a.into()))
+            .unwrap()
+            .finish()
+            .unwrap();
+        
+        // re-order the columns (reverse order) so that we can pop them
+        // this assumes a fixed order (which we should be able to guarantee)
+        let df = df.reverse();
+
+        self.id.extend(
+            df.column("id").unwrap().str().unwrap().into_no_null_iter()
+        );
+
+        // Self {
+        //     id: df.pop().unwrap().str().unwrap().into_no_null_iter().collect(),
+        //     galaxy: df.pop().unwrap().str().unwrap().into_no_null_iter().collect(),
+        //     level: df.pop().unwrap().str().unwrap().into_no_null_iter().collect(),
+        //     boss: df.pop().unwrap().str().unwrap().into_no_null_iter().collect(),
+        //     guards: df.pop().unwrap().str().unwrap().into_no_null_iter().collect(),
+        //     count: df.pop().unwrap().i64().unwrap().into_no_null_iter().collect(),
+        // }
+    }
+}
 
 fn parse_dg(a: &str) -> String {
     static RE_DG: Lazy<Regex> = Lazy::new(|| Regex::new(
@@ -22,7 +84,7 @@ fn parse_dg(a: &str) -> String {
 
 fn parse_ships(a: &str) {
     static RE_SHIPS: Lazy<Regex> = Lazy::new(|| Regex::new(
-        r"DX[0-9]{1,5}\u0000.*?(?<ship>[[:word:] ]*)\u{0000}(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
+        r"DX[0-9]{1,5}\u0000.*?(?<ship>[[:word:]\. ]*)\u{0000}(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
         // r"(?<ship>[[:word:] ]{5,11})"
     ).unwrap());
     
@@ -57,6 +119,15 @@ fn main() {
     let _ = cap.filter(
         "src host 51.222.248.34", true
     );
+
+    // save file
+    let raw_path = "raw/raw_dgs_kd.csv";
+    if fs::metadata(raw_path).is_ok() {
+        let mut dg_data = DgData::new();
+        dg_data.from_polars(raw_path);
+    } else {
+        let dg_data = DgData::new();
+    }
 
     let mut curr_dg: String = "".to_string();
 
