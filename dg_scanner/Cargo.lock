@@ -62,6 +62,7 @@ dependencies = [
  "once_cell",
  "pcap",
  "regex",
+ "serde",
  "serde_json",
 ]
 

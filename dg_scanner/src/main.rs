@@ -1,99 +1,76 @@
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-use std::fs;
+use std::fs::{File, metadata};
+use std::io::{BufReader, BufWriter};
+use std::collections::HashMap;
 use pcap::{Device, Capture};
-use regex::{Regex, Captures, CaptureMatches};
+use regex::{Regex};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
 
 #[derive(Serialize, Deserialize)]
-struct DgData {
-    id: Vec<String>
-    galaxy: Vec<String>
-    level: Vec<String>
-    boss: Vec<String>
-    guards: Vec<String>
-    count: Vec<i64>
+struct DgLevel {
+    id: String,
+    galaxy: String,
+    level: String,
+    guards: String,
+    boss: String
 }
 
-impl DgData {
-    fn new() -> Self {
-        Self {
-            id: Vec::new(),
-            galaxy: Vec::new(),
-            level: Vec::new(),
-            boss: Vec::new(),
-            guards: Vec::new(),
-            count: Vec::new()
-        }
-    }
+impl DgLevel {
+    fn new(a: &str) -> (str, Self) {
+        static RE_DG: Lazy<Regex> = Lazy::new(|| Regex::new(
+            r"DG (?<dg_gal>[[:word:] ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)"
+        ).unwrap());
+        let caps = RE_DG.captures(a).expect("Unable to parse the DG name");
 
-    fn to_polars(&self) -> DataFrame {
-        DataFrame::new(
-            vec![
-                Column::new("id".into(), self.id.clone()),
-                Column::new("galaxy".into(), self.galaxy.clone()),
-                Column::new("level".into(), self.level.clone()),
-                Column::new("boss".into(), self.boss.clone()),
-                Column::new("guards".into(), self.guards.clone()),
-                Column::new("count".into(), self.count.clone())
-            ]
-        ).unwrap()
-    }
+        // this SHOULD be the first match, which should be the level we are actually entering
+        let galaxy = caps.name("dg_gal").unwrap().as_str();
+        let level = caps.name("dg_level").unwrap().as_str();
+        let [_, id] = level.split_once(".").unwrap();
 
-    fn from_polars(&mut self, a: &str) {
-        let df = CsvReadOptions::default()
-            .with_has_header(true)
-            .try_into_reader_with_file_path(Some(a.into()))
-            .unwrap()
-            .finish()
-            .unwrap();
+        let mut data = Self {
+            id: format!("{} {}", galaxy, id).to_string(),
+            galaxy: galaxy.to_string(),
+            level: level.to_string(),
+            guards: "?".to_string(),
+            boss: "?".to_string(),
+        };
+
+        // handle the ships now
+        static RE_SHIPS: Lazy<Regex> = Lazy::new(|| Regex::new(
+            r"DX[0-9]{1,5}\u0000.*?(?<ship>[[:word:]\. ]*)\u{0000}(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
+        ).unwrap());
         
-        // re-order the columns (reverse order) so that we can pop them
-        // this assumes a fixed order (which we should be able to guarantee)
-        let df = df.reverse();
+        let caps_ship = RE_SHIPS.captures_iter(a);
+        // 4 cases:
+        // 1: matches the boss -> must be a guard, as only 1 boss ship -> SWAP boss and guard
+        // 2: matches the guard -> guard, do nothing
+        // 3: matches neither -> first scanned item, put as a guard
+        /*
+        boss, guard, guard, guard
+            1. boss  :: != data.boss, != data.guard :: boss -> data.guard
+            2. guard :: != data.boss, != data.guard :: data.guard -> data.boss :: guard -> data.guard
+            3. guard :: == data.guard
+        */
+        let (_, [ship1, _]) = caps_ship.next().unwrap().extract();
+        let (_, [ship2, _]) = caps_ship.next().unwrap().extract();
+        let (_, [ship3, _]) = caps_ship.next().unwrap().extract();
+        if (ship1 == ship2) {
+            data.guard = ship1;
+            data.boss = ship3;
+        } else if (ship1 == ship3) {
+            data.guard = ship1;
+            data.boss = ship2;
+        } else if (ship2 == ship3) {
+            data.guard = ship2;
+            data.boss = ship1;
+        }
 
-        self.id.extend(
-            df.column("id").unwrap().str().unwrap().into_no_null_iter()
-        );
-
-        // Self {
-        //     id: df.pop().unwrap().str().unwrap().into_no_null_iter().collect(),
-        //     galaxy: df.pop().unwrap().str().unwrap().into_no_null_iter().collect(),
-        //     level: df.pop().unwrap().str().unwrap().into_no_null_iter().collect(),
-        //     boss: df.pop().unwrap().str().unwrap().into_no_null_iter().collect(),
-        //     guards: df.pop().unwrap().str().unwrap().into_no_null_iter().collect(),
-        //     count: df.pop().unwrap().i64().unwrap().into_no_null_iter().collect(),
-        // }
+        (format!("{} {}", dg_gal, dg_level), data)
     }
 }
 
-fn parse_dg(a: &str) -> String {
-    static RE_DG: Lazy<Regex> = Lazy::new(|| Regex::new(
-        r"DG (?<dg_gal>[[:word:] ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)"
-    ).unwrap());
-    let caps = RE_DG.captures(a).expect("Unable to parse the DG name");
-
-    let dg_gal = caps.name("dg_gal").unwrap().as_str();
-    let dg_level = caps.name("dg_level").unwrap().as_str();
-
-    println!("{} {}", dg_gal, dg_level);
-
-    format!("{} {}", dg_gal, dg_level)
-}
-
-fn parse_ships(a: &str) {
-    static RE_SHIPS: Lazy<Regex> = Lazy::new(|| Regex::new(
-        r"DX[0-9]{1,5}\u0000.*?(?<ship>[[:word:]\. ]*)\u{0000}(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
-        // r"(?<ship>[[:word:] ]{5,11})"
-    ).unwrap());
-    
-    let caps_ship = RE_SHIPS.captures_iter(a);
-    for cap in caps_ship {
-        let (_, [ship, ship_type]) = cap.extract();
-        println!("\t{}", ship.to_string());
-    }
-}
 
 fn main() {
     let running = Arc::new(AtomicBool::new(true));
@@ -121,15 +98,18 @@ fn main() {
     );
 
     // save file
-    let raw_path = "raw/raw_dgs_kd.csv";
-    if fs::metadata(raw_path).is_ok() {
-        let mut dg_data = DgData::new();
-        dg_data.from_polars(raw_path);
+    let raw_path = "raw/raw_dgs_kd.json";
+    if metadata(raw_path).is_ok() {
+        let file = File::open(raw_path).unwrap();
+        let reader = BufReader::new(file);
+
+        let mut dg_data: HashMap<String, DgLevel> = serde_json::from_reader(reader).unwrap();
     } else {
-        let dg_data = DgData::new();
+        let dg_data: HashMap<String, DgLevel> = HashMap::new();
     }
 
-    let mut curr_dg: String = "".to_string();
+    // let mut curr_dg: String = "".to_string();
+    let mut dg_meta_packet: String = "".to_owned();
 
     while running.load(Ordering::SeqCst) {
         let packet = cap.next_packet().unwrap();
@@ -137,13 +117,21 @@ fn main() {
 
         static RE_META: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\x00-\x1F]DG ").unwrap());
         if RE_META.is_match(&data) {
-            curr_dg = parse_dg(&data);
+            // curr_dg = parse_dg(&data);
+            dg_meta_packet.push_str(&data);
         }
-        if curr_dg != "" {
-            parse_ships(&data);
+        if dg_meta_packet != "" {
+            dg_meta_packet.push_str(&data);
         }
         if data.contains(format!("Entering DG {}", curr_dg).as_str()) {
-            curr_dg = "".to_string();
+            // TODO might need to update this to include data packet up to the Entering DG part
+            let (gal, dg_level_data) = DgLevel::new(&dg_meta_packet);
+            let _ = dg_data.insert(gal, dg_level_data);
         }
     }
+
+    let file = File::open(raw_path).unwrap();
+    let writer = BufWriter::new(file);
+
+    let _ = serde_json::to_writer(writer, dg_data);
 }
