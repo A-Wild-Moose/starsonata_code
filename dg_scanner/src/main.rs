@@ -53,21 +53,27 @@ impl DgLevel {
             2. guard :: != data.boss, != data.guard :: data.guard -> data.boss :: guard -> data.guard
             3. guard :: == data.guard
         */
-        let (_, [ship1, _]) = caps_ship.next().unwrap().extract();
-        let (_, [ship2, _]) = caps_ship.next().unwrap().extract();
-        let (_, [ship3, _]) = caps_ship.next().unwrap().extract();
-        if (ship1 == ship2) {
-            data.guard = ship1;
-            data.boss = ship3;
-        } else if (ship1 == ship3) {
-            data.guard = ship1;
-            data.boss = ship2;
-        } else if (ship2 == ship3) {
-            data.guard = ship2;
-            data.boss = ship1;
+        let (_, [ship, _]) = caps_ship.next().unwrap().extract();
+        data.guard = ship;
+
+        for cap in caps_ship {
+            let (_, [ship, _]) = cap.extract();
+
+            if (ship == data.guard) {
+                // pass
+            } else { // ship does not match existing guard
+                if (data.boss == "?") {
+                    data.boss = ship;
+                } else if (ship != data.boss) {
+                    panic!("Ship does not match either boss or guard");
+                } else {
+                    data.boss = data.guard;
+                    data.guard = ship;
+                }
+            }
         }
 
-        (format!("{} {}", dg_gal, dg_level), data)
+        (galaxy, data)
     }
 }
 
