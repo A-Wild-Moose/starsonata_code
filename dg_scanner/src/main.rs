@@ -1,12 +1,11 @@
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::fs::{File, metadata};
-use std::io::{BufReader, BufWriter};
+use std::io::{BufReader, BufWriter, Write};
 use std::collections::HashMap;
 use pcap::{Device, Capture};
 use regex::{Regex};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use serde_json::Result;
 
 #[derive(Serialize, Deserialize)]
 struct DgLevel {
@@ -18,7 +17,7 @@ struct DgLevel {
 }
 
 impl DgLevel {
-    fn new(a: &str) -> (str, Self) {
+    fn new(a: &str) -> (String, Self) {
         static RE_DG: Lazy<Regex> = Lazy::new(|| Regex::new(
             r"DG (?<dg_gal>[[:word:] ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)"
         ).unwrap());
@@ -27,7 +26,12 @@ impl DgLevel {
         // this SHOULD be the first match, which should be the level we are actually entering
         let galaxy = caps.name("dg_gal").unwrap().as_str();
         let level = caps.name("dg_level").unwrap().as_str();
-        let [_, id] = level.split_once(".").unwrap();
+        let (_, mut id) = level.split_once(".").unwrap();
+
+        // Remove any characters
+        id = id.trim_end_matches(&['A', 'B', 'C', 'D']);
+
+        println!("New DG Level - galaxy: {} level: {} id: {}", galaxy, level, id);
 
         let mut data = Self {
             id: format!("{} {}", galaxy, id).to_string(),
@@ -39,41 +43,40 @@ impl DgLevel {
 
         // handle the ships now
         static RE_SHIPS: Lazy<Regex> = Lazy::new(|| Regex::new(
-            r"DX[0-9]{1,5}\u0000.*?(?<ship>[[:word:]\. ]*)\u{0000}(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
+            r"DX[0-9]{1,5}\u0000(?s:.*?)\u0000(?<ship>[[:word:]\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
         ).unwrap());
         
-        let caps_ship = RE_SHIPS.captures_iter(a);
-        // 4 cases:
-        // 1: matches the boss -> must be a guard, as only 1 boss ship -> SWAP boss and guard
-        // 2: matches the guard -> guard, do nothing
-        // 3: matches neither -> first scanned item, put as a guard
-        /*
-        boss, guard, guard, guard
-            1. boss  :: != data.boss, != data.guard :: boss -> data.guard
-            2. guard :: != data.boss, != data.guard :: data.guard -> data.boss :: guard -> data.guard
-            3. guard :: == data.guard
-        */
+        let mut caps_ship = RE_SHIPS.captures_iter(a);
+
+        // get first ship
         let (_, [ship, _]) = caps_ship.next().unwrap().extract();
-        data.guard = ship;
+
+        data.guards = ship.to_string();
 
         for cap in caps_ship {
             let (_, [ship, _]) = cap.extract();
 
-            if (ship == data.guard) {
+            if ship == data.guards {
                 // pass
             } else { // ship does not match existing guard
-                if (data.boss == "?") {
-                    data.boss = ship;
-                } else if (ship != data.boss) {
+                if data.boss == "?" {
+                    data.boss = ship.to_string();
+                } else if ship != data.boss {
                     panic!("Ship does not match either boss or guard");
                 } else {
-                    data.boss = data.guard;
-                    data.guard = ship;
+                    data.boss = data.guards;
+                    data.guards = ship.to_string();
                 }
             }
         }
 
-        (galaxy, data)
+        if data.boss == "?" {
+            println!("\t{}", data.guards);
+        } else {
+            println!("\t{}, {}", data.guards, data.boss);
+        }
+
+        (format!("{} {}", galaxy, level), data)
     }
 }
 
@@ -105,14 +108,18 @@ fn main() {
 
     // save file
     let raw_path = "raw/raw_dgs_kd.json";
-    if metadata(raw_path).is_ok() {
+    let mut dg_data: HashMap<String, DgLevel> = if metadata(raw_path).is_ok() {
         let file = File::open(raw_path).unwrap();
         let reader = BufReader::new(file);
 
-        let mut dg_data: HashMap<String, DgLevel> = serde_json::from_reader(reader).unwrap();
+        serde_json::from_reader(reader).unwrap()
     } else {
-        let dg_data: HashMap<String, DgLevel> = HashMap::new();
-    }
+        HashMap::new()
+    };
+
+    // debug log
+    let f = File::create("raw/debug.log").expect("Unable to create debug log file");
+    let mut f = BufWriter::new(f);
 
     // let mut curr_dg: String = "".to_string();
     let mut dg_meta_packet: String = "".to_owned();
@@ -125,19 +132,26 @@ fn main() {
         if RE_META.is_match(&data) {
             // curr_dg = parse_dg(&data);
             dg_meta_packet.push_str(&data);
+            println!("Starting galaxy data capture");
         }
         if dg_meta_packet != "" {
             dg_meta_packet.push_str(&data);
         }
-        if data.contains(format!("Entering DG {}", curr_dg).as_str()) {
+        // if data.contains(format!("Entering DG {}", curr_dg).as_str()) {
+        if data.contains("Entering DG ") {
             // TODO might need to update this to include data packet up to the Entering DG part
+            dg_meta_packet.push_str(&data);
+
+            write!(f, "{}\n\n", dg_meta_packet).expect("Unable to write debug log");
+
             let (gal, dg_level_data) = DgLevel::new(&dg_meta_packet);
             let _ = dg_data.insert(gal, dg_level_data);
+            dg_meta_packet = "".to_string();
         }
     }
 
-    let file = File::open(raw_path).unwrap();
+    let file = File::create(raw_path).unwrap();
     let writer = BufWriter::new(file);
 
-    let _ = serde_json::to_writer(writer, dg_data);
+    let _ = serde_json::to_writer(writer, &dg_data);
 }
