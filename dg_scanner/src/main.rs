@@ -43,7 +43,7 @@ impl DgLevel {
 
         // handle the ships now
         static RE_SHIPS: Lazy<Regex> = Lazy::new(|| Regex::new(
-            r"DX[0-9]{1,5}\u0000(?s:.*?)\u0000(?<ship>[[:word:]\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
+            r"DX[0-9]{1,5}\u0000(?s:.*?)[\x00-\x1F](?<ship>[[:word:]\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
         ).unwrap());
         
         let mut caps_ship = RE_SHIPS.captures_iter(a);
@@ -80,8 +80,20 @@ impl DgLevel {
     }
 }
 
-
 fn main() {
+    use std::fs;
+
+    let data = fs::read_to_string("raw/debug.log").expect("unable to read file");
+
+    // let re = Regex::new(r"DX[0-9]{1,5}\x00(?s:.*?)\x00(?<ship>[[:word:]\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)").unwrap();
+    let re = Regex::new(r"[\x00-\x1f](?<ship>[[:word:]\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)").unwrap();
+    for cap in re.captures_iter(&data){
+        let (_, [c1, c2]) = cap.extract();
+        println!("{}", c1);
+    }
+}
+
+fn main_() {
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
 
