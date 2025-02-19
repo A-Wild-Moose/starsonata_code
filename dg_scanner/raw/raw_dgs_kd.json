@@ -1,8 +1,1 @@
-{
-    "id": ["Plante 6.1107", "Plante 6.1107"],
-    "galaxy": ["Plante", "Plante"],
-    "level": ["6.1107", "5.1107"],
-    "boss": ["", ""],
-    "guards": ["Mimeberg", "Hostship"],
-    "count": [5, 4]
-}
+{"Fyfe 1.280":{"id":"Fyfe 280","galaxy":"Fyfe","level":"1.280","guards":"Flyswatter Egg","boss":"?"},"Bourlaug Wheat 0.210":{"id":"Bourlaug Wheat 210","galaxy":"Bourlaug Wheat","level":"0.210","guards":"Rat Queen","boss":"Monochrome Tint"},"Bourlaug Wheat 4.210":{"id":"Bourlaug Wheat 210","galaxy":"Bourlaug Wheat","level":"4.210","guards":"Space Blue Prototype","boss":"?"},"Fyfe 0.280":{"id":"Fyfe 280","galaxy":"Fyfe","level":"0.280","guards":"Tear","boss":"Goldenboy Nugget"},"Fyfe 2.280":{"id":"Fyfe 280","galaxy":"Fyfe","level":"2.280","guards":"Zebucart","boss":"?"},"Bourlaug Wheat 2.210":{"id":"Bourlaug Wheat 210","galaxy":"Bourlaug Wheat","level":"2.210","guards":"Goldenboy Nugget","boss":"?"},"Fyfe 3.280":{"id":"Fyfe 280","galaxy":"Fyfe","level":"3.280","guards":"Rat Queen","boss":"?"},"Bourlaug Wheat 1.210":{"id":"Bourlaug Wheat 210","galaxy":"Bourlaug Wheat","level":"1.210","guards":"Monochrome Tint","boss":"?"},"Bourlaug Wheat 3.210":{"id":"Bourlaug Wheat 210","galaxy":"Bourlaug Wheat","level":"3.210","guards":"Flyswatter Larva","boss":"?"}}
