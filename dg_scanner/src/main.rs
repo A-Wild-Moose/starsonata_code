@@ -43,16 +43,20 @@ impl DgLevel {
 
         // handle the ships now
         static RE_SHIPS: Lazy<Regex> = Lazy::new(|| Regex::new(
-            r"DX[0-9]{1,5}\u0000(?s:.*?)[\x00-\x1F](?<ship>[[:word:]\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
+            r"DX[0-9]{1,5}\u0000(?s:.*?)[\x00-\x1F](?<ship>[[:word:]'\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
         ).unwrap());
         
         let mut caps_ship = RE_SHIPS.captures_iter(a);
 
-        // get first ship
-        let (_, [ship, _]) = caps_ship.next().unwrap().extract();
+        // get first ship, return empty if there are no AI
+        if let Some(c) = caps_ship.next() {
+            let (_, [ship, _]) = c.extract();
+            data.guards = ship.to_string();
+        } else {
+            return (format!("{} {}", galaxy, level), data) 
+        }
 
-        data.guards = ship.to_string();
-
+        // iterate over the remaining ships as possible
         for cap in caps_ship {
             let (_, [ship, _]) = cap.extract();
 
@@ -80,20 +84,20 @@ impl DgLevel {
     }
 }
 
-fn main() {
+fn main_() {
     use std::fs;
 
     let data = fs::read_to_string("raw/debug.log").expect("unable to read file");
 
     // let re = Regex::new(r"DX[0-9]{1,5}\x00(?s:.*?)\x00(?<ship>[[:word:]\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)").unwrap();
-    let re = Regex::new(r"[\x00-\x1f](?<ship>[[:word:]\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)").unwrap();
+    let re = Regex::new(r"[\x00-\x1f](?<ship>[[:word:]'\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)").unwrap();
     for cap in re.captures_iter(&data){
         let (_, [c1, c2]) = cap.extract();
         println!("{}", c1);
     }
 }
 
-fn main_() {
+fn main() {
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
 
@@ -137,27 +141,33 @@ fn main_() {
     let mut dg_meta_packet: String = "".to_owned();
 
     while running.load(Ordering::SeqCst) {
-        let packet = cap.next_packet().unwrap();
+        let Ok(packet) = cap.next_packet() else {
+            continue;
+        };
         let data = String::from_utf8_lossy(packet.data);
 
         static RE_META: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\x00-\x1F]DG ").unwrap());
-        if RE_META.is_match(&data) {
-            // curr_dg = parse_dg(&data);
-            dg_meta_packet.push_str(&data);
-            println!("Starting galaxy data capture");
+        if let Some(m) = RE_META.find(&data) {
+            dg_meta_packet.push_str(&data[m.start()..]);
         }
         if dg_meta_packet != "" {
             dg_meta_packet.push_str(&data);
         }
-        // if data.contains(format!("Entering DG {}", curr_dg).as_str()) {
-        if data.contains("Entering DG ") {
-            // TODO might need to update this to include data packet up to the Entering DG part
-            dg_meta_packet.push_str(&data);
+        if let Some(i1) = data.find("Entering DG ") {
+            dg_meta_packet.push_str(&data[0..i1]);
 
             write!(f, "{}\n\n", dg_meta_packet).expect("Unable to write debug log");
 
             let (gal, dg_level_data) = DgLevel::new(&dg_meta_packet);
-            let _ = dg_data.insert(gal, dg_level_data);
+            // insert the data into the map. If it already exists, handle checking if we are actually updating an empty DG
+            if let Some(val) = dg_data.get(&gal) {
+                if val.guards == "?" {
+                    let _ = dg_data.insert(gal, dg_level_data);
+                }
+            } else {
+                let _ = dg_data.insert(gal, dg_level_data);
+            }
+            // let _ = dg_data.insert(gal, dg_level_data);
             dg_meta_packet = "".to_string();
         }
     }
