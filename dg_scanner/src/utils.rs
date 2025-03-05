@@ -1,2 +1,2 @@
 pub mod device;
-pub mod dg_level;
+pub mod dg_data;

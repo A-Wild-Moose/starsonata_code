@@ -25,5 +25,10 @@ pub fn get_pcap_capture() -> Capture<Active> {
     }
 
     // create the capture and open.
-    Capture::from_device(main_device).unwrap().open().unwrap()
+    let mut cap = Capture::from_device(main_device).unwrap().open().unwrap();
+    let _ = cap.filter(
+        "src host 51.222.248.34", true
+    );
+
+    return cap
 }

@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::fs::{File, metadata};
+use std::io::{BufReader, BufWriter};
 use serde::{Deserialize, Serialize};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -5,11 +8,11 @@ use regex::Regex;
 
 #[derive(Serialize, Deserialize)]
 pub struct DgLevel {
-    id: String,
-    galaxy: String,
-    level: String,
+    pub id: String,
+    pub galaxy: String,
+    pub level: String,
     pub guards: String,
-    boss: String
+    pub boss: String
 }
 
 impl DgLevel {
@@ -77,5 +80,51 @@ impl DgLevel {
         }
 
         (format!("{} {}", galaxy, level), data)
+    }
+}
+
+
+// DG data handling
+pub struct DgData {
+    data: HashMap<String, DgLevel>,
+    raw_path: String
+}
+
+impl DgData {
+    pub fn new(path: &str) -> Self {
+        if metadata(path).is_ok() {
+            let file = File::open(path).unwrap();
+            let reader = BufReader::new(file);
+
+            Self{
+                data: serde_json::from_reader(reader).unwrap(),
+                raw_path: path.to_string()
+            }
+        } else {
+            Self{
+                data: HashMap::new(),
+                raw_path: path.to_string()
+            }
+        }
+    }
+
+    pub fn update(&mut self, dg_multi_packet: &str) {
+        let (gal, dg_level_data) = DgLevel::new(dg_multi_packet);
+        // insert data into the map. If it already exists, handle checking if the level data
+        // contains actual updates or not
+        if let Some(val) = self.data.get(&gal) {
+            if val.guards == "?" {
+                let _ = self.data.insert(gal, dg_level_data);
+            }
+        } else {
+            let _ = self.data.insert(gal, dg_level_data);
+        }
+    }
+
+    pub fn store(&self) {
+        let file = File::create(self.raw_path.clone()).unwrap();
+        let writer = BufWriter::new(file);
+
+        let _ = serde_json::to_writer(writer, &self.data);
     }
 }

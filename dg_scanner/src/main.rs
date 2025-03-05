@@ -1,14 +1,47 @@
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-use std::fs::{File, metadata};
+use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::collections::HashMap;
-use pcap::{Device, Capture};
 use regex::{Regex};
 use once_cell::sync::Lazy;
 
+use polars::prelude::*;
+
 use utils::device::get_pcap_capture;
-use utils::dg_level::DgLevel;
+use utils::dg_data::{DgLevel, DgData};
 mod utils;
+
+
+struct DgData_ {
+    name: Vec<String>,
+    id: Vec<String>,
+    galaxy: Vec<String>,
+    level: Vec<String>,
+    guards: Vec<String>,
+    boss: Vec<String>
+}
+
+impl DgData_ {
+    fn new() -> Self{
+        Self {
+            name: Vec::new(),
+            id: Vec::new(),
+            galaxy: Vec::new(),
+            level: Vec::new(),
+            guards: Vec::new(),
+            boss: Vec::new()
+        }
+    }
+
+    fn add_level(&mut self, k: &String, v: &DgLevel) {
+        self.name.push(k.to_string());
+        self.id.push(v.id.clone());
+        self.galaxy.push(v.galaxy.clone());
+        self.level.push(v.level.clone());
+        self.guards.push(v.guards.clone());
+        self.boss.push(v.boss.clone());
+    }
+}
 
 
 
@@ -25,8 +58,42 @@ fn main_() {
     //     let (_, [c1, c2]) = cap.extract();
     //     println!("{}", c1);
     // }
-    let cap = get_pcap_capture();
+    // let cap = get_pcap_capture();
     // println!("{:?}", main_device.desc);
+
+    // Converting json store to dataframe
+    let file = File::open("raw/raw_dgs_kd.json").unwrap();
+    let reader = BufReader::new(file);
+    let dg_data: HashMap<String, DgLevel> = serde_json::from_reader(reader).unwrap();
+
+    let mut dg_data_2: DgData_ = DgData_::new();
+
+    for (k, v) in dg_data.iter() {
+        dg_data_2.add_level(k, v);
+    }
+
+    let mut df = DataFrame::new(
+        vec![
+            Column::new("Name".into(), dg_data_2.name),
+            Column::new("Id".into(), dg_data_2.id),
+            Column::new("Galaxy".into(), dg_data_2.galaxy),
+            Column::new("Level".into(), dg_data_2.level),
+            Column::new("Guard".into(), dg_data_2.guards),
+            Column::new("Boss".into(), dg_data_2.boss)
+        ]
+    ).unwrap();
+
+    df = df.sort(
+        ["Id", "Name"],
+        SortMultipleOptions::new()
+            .with_order_descending_multi([false, true])
+    ).unwrap();
+
+    // let mut file = std::fs::File::open("raw/raw_dgs_kd.json").unwrap();
+    // let df = JsonReader::new(&mut file).finish().unwrap();
+
+    println!("{:?}", df);
+
 }
 
 fn main() {
@@ -37,33 +104,10 @@ fn main() {
         r.store(false, Ordering::SeqCst);
     }).expect("Error setting Ctrl-C handler");
 
-    let mut main_device = Device::lookup().unwrap().unwrap();
-    let devices = Device::list().unwrap();
+    let mut cap = get_pcap_capture();
 
-    for dev in devices.iter(){
-        if dev.desc.clone().unwrap().contains("Mullvad Tunnel") {
-            main_device = dev.clone();
-        }
-    }
-
-    // capture device
-    let mut cap = Capture::from_device(main_device).unwrap().open().unwrap();
-    
-    // set the filters on the packat reading
-    let _ = cap.filter(
-        "src host 51.222.248.34", true
-    );
-
-    // save file
-    let raw_path = "raw/raw_dgs_kd.json";
-    let mut dg_data: HashMap<String, DgLevel> = if metadata(raw_path).is_ok() {
-        let file = File::open(raw_path).unwrap();
-        let reader = BufReader::new(file);
-
-        serde_json::from_reader(reader).unwrap()
-    } else {
-        HashMap::new()
-    };
+    // dg data store, with the save file
+    let mut dg_data = DgData::new("raw/raw_dgs_kd.json");
 
     // debug log
     let f = File::create("raw/debug.log").expect("Unable to create debug log file");
@@ -90,22 +134,13 @@ fn main() {
 
             write!(f, "{}\n\n", dg_meta_packet).expect("Unable to write debug log");
 
-            let (gal, dg_level_data) = DgLevel::new(&dg_meta_packet);
-            // insert the data into the map. If it already exists, handle checking if we are actually updating an empty DG
-            if let Some(val) = dg_data.get(&gal) {
-                if val.guards == "?" {
-                    let _ = dg_data.insert(gal, dg_level_data);
-                }
-            } else {
-                let _ = dg_data.insert(gal, dg_level_data);
-            }
-            // let _ = dg_data.insert(gal, dg_level_data);
+            // update the dg data store
+            dg_data.update(&dg_meta_packet);
+
+            // reset the meta packet to empty for the next dg level
             dg_meta_packet = "".to_string();
         }
     }
 
-    let file = File::create(raw_path).unwrap();
-    let writer = BufWriter::new(file);
-
-    let _ = serde_json::to_writer(writer, &dg_data);
+    dg_data.store();
 }
