@@ -110,7 +110,9 @@ fn main() {
     let mut dg_data = DgData::new("raw/raw_dgs_kd.json");
 
     // debug log
-    let f = File::create("raw/debug.log").expect("Unable to create debug log file");
+    let debug_path = std::path::Path::new("raw/debug.log");
+    std::fs::create_dir_all(debug_path.parent().unwrap()).unwrap();
+    let f = File::create(debug_path).expect("Unable to create debug log file");
     let mut f = BufWriter::new(f);
 
     // let mut curr_dg: String = "".to_string();
@@ -142,5 +144,6 @@ fn main() {
         }
     }
 
+    // ADJUST TO every time
     dg_data.store();
 }

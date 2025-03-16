@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs::{File, metadata};
 use std::io::{BufReader, BufWriter};
+use std::path::Path;
 use serde::{Deserialize, Serialize};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -18,7 +19,7 @@ pub struct DgLevel {
 impl DgLevel {
     pub fn new(a: &str) -> (String, Self) {
         static RE_DG: Lazy<Regex> = Lazy::new(|| Regex::new(
-            r"DG (?<dg_gal>[[:word:] ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)"
+            r"DG (?<dg_gal>[[:word:]' ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)"
         ).unwrap());
         let caps = RE_DG.captures(a).expect("Unable to parse the DG name");
 
@@ -85,25 +86,25 @@ impl DgLevel {
 
 
 // DG data handling
-pub struct DgData {
+pub struct DgData<'a> {
     data: HashMap<String, DgLevel>,
-    raw_path: String
+    raw_path: &'a Path
 }
 
-impl DgData {
-    pub fn new(path: &str) -> Self {
+impl<'a> DgData<'a> {
+    pub fn new(path: &'a str) -> DgData<'a> {
         if metadata(path).is_ok() {
             let file = File::open(path).unwrap();
             let reader = BufReader::new(file);
 
             Self{
                 data: serde_json::from_reader(reader).unwrap(),
-                raw_path: path.to_string()
+                raw_path: Path::new(path)
             }
         } else {
             Self{
                 data: HashMap::new(),
-                raw_path: path.to_string()
+                raw_path: Path::new(path)
             }
         }
     }
@@ -122,7 +123,8 @@ impl DgData {
     }
 
     pub fn store(&self) {
-        let file = File::create(self.raw_path.clone()).unwrap();
+        std::fs::create_dir_all(self.raw_path.parent().unwrap()).unwrap();
+        let file = File::create(self.raw_path).unwrap();
         let writer = BufWriter::new(file);
 
         let _ = serde_json::to_writer(writer, &self.data);
