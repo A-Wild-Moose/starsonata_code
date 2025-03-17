@@ -5,6 +5,60 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use rusqlite::Connection;
 
+
+#[derive(Debug)]
+struct DgPacket {
+    packet: String,
+    in_progress: bool,
+    complete: bool,
+    galaxy: Option<String>,
+    level: Option<String>,
+}
+
+impl DgPacket {
+    pub fn new() -> Self {
+        Self {
+            packet: "".to_string(),
+            in_progress: false,
+            complete: false,
+            galaxy: None,
+            level: None,
+        }
+    }
+
+    pub fn accumulate(&mut self, a: &str) {
+        static RE_START: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\x00-\x1F]DG ").unwrap());
+        static RE_END: Lazy<Regex> = Lazy::new(|| Regex::new(r"Entering DG (?<dg_gal>[[:word:]' ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)\.[\x00-\x1F]"));
+
+        if let Some(m) = RE_START.find(a) {
+            self.packet.push_str(a[m.start()..]);
+            self.in_progress = true;
+        }
+
+        if self.in_progress {
+            self.packet.push_str(a);
+        }
+
+        if let Some(end_cap) = RE_END.captures(a) {
+            let level_match = end_cap.name("dg_level").expect("Unable to parse DG level");
+
+            self.packet.push_str(a[0..level_match.end()]);
+            self.in_progress = false;
+            self.complete = true;
+            self.galaxy = end_cap.name("dg_gal").expect("Unable to parse DG name").as_str().to_string();
+            self.level = level_match.as_str().to_string();
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.packet = "".to_string();
+        self.in_progress = false;
+        self.complete = false;
+        self.galaxy = None;
+        self.level = None;
+    }
+}
+
 #[derive(Debug)]
 struct DgLevel {
     name: String,  // galaxy + level
@@ -16,25 +70,18 @@ struct DgLevel {
 }
 
 impl DgLevel {
-    pub fn new(a: &str) -> Self {
-        static RE_DG: Lazy<Regex> = Lazy::new(|| Regex::new(
-            r"DG (?<dg_gal>[[:word:]' ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)"
-        ).unwrap());
-        let caps = RE_DG.captures(a).expect("Unable to parse the DG name");
+    pub fn new(dg_packet: &DgPacket) -> Self {
+        // get the ID for the dg level - post decimal value
+        let (_, id) = dg_packet.level.split_once(".").unwrap();  // can contain A/B/C/D split ids
 
-        // this SHOULD be the first match, which should be the level we are actually entering
-        let galaxy = caps.name("dg_gal").unwrap().as_str();
-        let level = caps.name("dg_level").unwrap().as_str();
-        let (_, id) = level.split_once(".").unwrap();  // can contain A/B/C/D split ids
-
-        println!("New DG Level - galaxy: {} level {} id: {}", galaxy, level, id);
+        println!("New DG Level - galaxy: {} level {} id: {}", dg_packet.galaxy, dg_packet.level, id);
 
         // allocate the data
         let mut data = Self {
-            name: format!("{} {}", galaxy, level).to_string(),
+            name: format!("{} {}", dg_packet.galaxy, dg_packet.level).to_string(),
             id: id.to_string(),
-            galaxy: galaxy.to_string(),
-            level: level.to_string(),
+            galaxy: dg_packet.galaxy.copy(),
+            level: dg_packet.level.copy(),
             guard: "?".to_string(),
             boss: "".to_string(),
         };
