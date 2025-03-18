@@ -7,12 +7,12 @@ use rusqlite::Connection;
 
 
 #[derive(Debug)]
-struct DgPacket {
-    packet: String,
+pub struct DgPacket {
+    pub packet: String,
     in_progress: bool,
-    complete: bool,
-    galaxy: Option<String>,
-    level: Option<String>,
+    pub complete: bool,
+    galaxy: String,
+    level: String,
 }
 
 impl DgPacket {
@@ -21,17 +21,17 @@ impl DgPacket {
             packet: "".to_string(),
             in_progress: false,
             complete: false,
-            galaxy: None,
-            level: None,
+            galaxy: "".to_string(),
+            level: "".to_string(),
         }
     }
 
     pub fn accumulate(&mut self, a: &str) {
         static RE_START: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\x00-\x1F]DG ").unwrap());
-        static RE_END: Lazy<Regex> = Lazy::new(|| Regex::new(r"Entering DG (?<dg_gal>[[:word:]' ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)\.[\x00-\x1F]"));
+        static RE_END: Lazy<Regex> = Lazy::new(|| Regex::new(r"Entering DG (?<dg_gal>[[:word:]' ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)\.[\x00-\x1F]").unwrap());
 
         if let Some(m) = RE_START.find(a) {
-            self.packet.push_str(a[m.start()..]);
+            self.packet.push_str(&a[m.start()..]);
             self.in_progress = true;
         }
 
@@ -42,7 +42,7 @@ impl DgPacket {
         if let Some(end_cap) = RE_END.captures(a) {
             let level_match = end_cap.name("dg_level").expect("Unable to parse DG level");
 
-            self.packet.push_str(a[0..level_match.end()]);
+            self.packet.push_str(&a[0..level_match.end()]);
             self.in_progress = false;
             self.complete = true;
             self.galaxy = end_cap.name("dg_gal").expect("Unable to parse DG name").as_str().to_string();
@@ -54,8 +54,8 @@ impl DgPacket {
         self.packet = "".to_string();
         self.in_progress = false;
         self.complete = false;
-        self.galaxy = None;
-        self.level = None;
+        self.galaxy = "".to_string();
+        self.level = "".to_string();
     }
 }
 
@@ -74,24 +74,24 @@ impl DgLevel {
         // get the ID for the dg level - post decimal value
         let (_, id) = dg_packet.level.split_once(".").unwrap();  // can contain A/B/C/D split ids
 
-        println!("New DG Level - galaxy: {} level {} id: {}", dg_packet.galaxy, dg_packet.level, id);
-
         // allocate the data
         let mut data = Self {
             name: format!("{} {}", dg_packet.galaxy, dg_packet.level).to_string(),
             id: id.to_string(),
-            galaxy: dg_packet.galaxy.copy(),
-            level: dg_packet.level.copy(),
+            galaxy: dg_packet.galaxy.clone(),
+            level: dg_packet.level.clone(),
             guard: "?".to_string(),
             boss: "".to_string(),
         };
+
+        println!("New DG Level - galaxy: {} level {} id: {}", data.galaxy, data.level, id);
 
         // handle the ships now
         static RE_SHIPS: Lazy<Regex> = Lazy::new(|| Regex::new(
             r"DX[0-9]{1,5}\u0000(?s:.*?)[\x00-\x1F](?<ship>[[:word:]'\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
         ).unwrap());
 
-        let mut caps_ship = RE_SHIPS.captures_iter(a);
+        let mut caps_ship = RE_SHIPS.captures_iter(&dg_packet.packet);
 
         // get first ship, return empty if there are no AI
         if let Some(c) = caps_ship.next() {
@@ -182,7 +182,7 @@ impl<'a> DgData<'a> {
         }
     }
 
-    pub fn update(&self, dg_multi_packet: &str) {
+    pub fn update(&self, dg_multi_packet: &DgPacket) {
         let dg_level_data = DgLevel::new(dg_multi_packet);
         dg_level_data.add_to_database(&self.db);
     }

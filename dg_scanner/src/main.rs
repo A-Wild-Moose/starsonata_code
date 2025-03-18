@@ -44,7 +44,7 @@ fn main() {
         if dg_meta_packet.complete {
             write!(f, "{}\n\n", dg_meta_packet.packet).expect("Unable to write debug log");
             // update the dg data store
-            dg_data.update(&dg_meta_packet.packet);
+            dg_data.update(&dg_meta_packet);
             // reset the meta packate to empty for the next dg level
             dg_meta_packet.reset();
         }
