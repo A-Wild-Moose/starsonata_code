@@ -63,6 +63,7 @@ impl DgPacket {
 struct DgLevel {
     name: String,  // galaxy + level
     id: String,  // decimal ID
+    room: i16, // room ID
     galaxy: String,  // galaxy name
     level: String,  // full level name
     guard: String,
@@ -72,12 +73,13 @@ struct DgLevel {
 impl DgLevel {
     pub fn new(dg_packet: &DgPacket) -> Self {
         // get the ID for the dg level - post decimal value
-        let (_, id) = dg_packet.level.split_once(".").unwrap();  // can contain A/B/C/D split ids
+        let (room, id) = dg_packet.level.split_once(".").unwrap();  // can contain A/B/C/D split ids
 
         // allocate the data
         let mut data = Self {
             name: format!("{} {}", dg_packet.galaxy, dg_packet.level).to_string(),
             id: id.to_string(),
+            room: room.parse::<i16>().unwrap(),
             galaxy: dg_packet.galaxy.clone(),
             level: dg_packet.level.clone(),
             guard: "?".to_string(),
@@ -131,10 +133,10 @@ impl DgLevel {
 
     pub fn add_to_database(&self, db_conn: &Connection) {
         let _ = db_conn.execute(
-            "INSERT OR REPLACE INTO DgData (name, id, galaxy, level, guard, boss) 
-            SELECT ?1, ?2, ?3, ?4, ?5, ?6
+            "INSERT OR REPLACE INTO DgData (name, id, room, galaxy, level, guard, boss) 
+            SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7
             WHERE NOT EXISTS (SELECT * FROM DgData WHERE name=?1 AND guard<>'?')",
-            (&self.name, &self.id, &self.galaxy, &self.level, &self.guard, &self.boss)
+            (&self.name, &self.id, &self.room, &self.galaxy, &self.level, &self.guard, &self.boss)
         ).unwrap();
         // let _ = db_conn.execute(
         //     "INSERT OR REPLACE INTO DgData (name, id, galaxy, level, guard, boss)
@@ -167,6 +169,7 @@ impl<'a> DgData<'a> {
                 "CREATE TABLE DgData (
                     name VARCHAR(50) PRIMARY KEY,
                     id VARCHAR(5),
+                    room SMALLINT(5),
                     galaxy VARCHAR(40),
                     level VARCHAR(10),
                     guard VARCHAR(40),
