@@ -11,7 +11,15 @@ use polars::prelude::*;
 use polars::prelude::pivot::pivot_stable;
 use polars::chunked_array::ops::SortMultipleOptions;
 
+use dg_scanner::ss_api::get_galaxy_data;
+
 fn main() {
+    let LAYER_MAP: DataFrame = df!(
+        "layer" => [0i64, 3i64, 4i64, 6i64],
+        "layer_name" => ["EF", "WS", "Perilous", "KD"]
+    )
+        .unwrap();
+
     let mut dest = ArrowDestination::new();
     let source = SQLiteSource::new("raw/dgs.db3", 10).expect("cannont create source");
     let queries = &["SELECT * FROM DgData"];
@@ -42,6 +50,36 @@ fn main() {
         SortMultipleOptions::default()
             .with_order_descending_multi([false, false])
     ).unwrap();
+
+    // get the galaxy information from the SS API
+    let galaxy_data = get_galaxy_data("raw/api_galaxy_data.json");
+
+    // get the layer/df information
+    data_wide = data_wide
+        .lazy()
+        .join(
+            galaxy_data.lazy(),
+            [col("galaxy")],
+            [col("name")],
+            JoinArgs::new(JoinType::Left)
+        )
+        .join(
+            LAYER_MAP.lazy(),
+            [col("layer")],
+            [col("layer")],
+            JoinArgs::new(JoinType::Left)
+        )
+        .with_columns([
+            col("df") * lit(100)
+        ])
+        .select(
+            [
+                cols(["layer_name", "galaxy", "id", "df", "boss"]),
+                all().exclude(["layer_name", "galaxy", "id", "df", "boss"])
+            ]
+        )
+        .collect()
+        .expect("Unable to join DG data with Galaxy data.");
 
     let path = Path::new("raw/dgs.csv");
     create_dir_all(path.parent().unwrap()).unwrap();

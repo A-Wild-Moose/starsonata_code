@@ -147,17 +147,15 @@ impl DgLevel {
 }
 
 // DG DATA HANDLING
-pub struct DgData<'a> {
+pub struct DgData {
     db: Connection,
-    raw_path: &'a Path
 }
 
-impl<'a> DgData<'a> {
-    pub fn new(path: &'a str) -> DgData<'a> {
+impl DgData {
+    pub fn new(path: &str) -> DgData {
         if metadata(path).is_ok() {
             Self{
                 db: Connection::open(path).unwrap(),
-                raw_path: Path::new(path)
             }
         } else {
             let path = Path::new(path);
@@ -180,7 +178,6 @@ impl<'a> DgData<'a> {
 
             Self{
                 db: conn,
-                raw_path: path
             }
         }
     }

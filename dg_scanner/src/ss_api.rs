@@ -4,8 +4,28 @@ use std::path::Path;
 use std::collections::HashMap;
 
 use serde::{Serialize, Deserialize};
+use polars::prelude::*;
 
 const API_GALAXY_URL: &str = "https://www.starsonata.com/webapi/galaxies/v1";
+
+// https://stackoverflow.com/questions/73167416/creating-polars-dataframe-from-vecstruct
+macro_rules! struct_to_dataframe {
+    ($input:expr, [$($field:ident),+]) => {
+        {
+            let len = $input.len().to_owned();
+
+            // Extract the field values into separate vectors
+            $(let mut $field = Vec::with_capacity(len);)*
+
+            for e in $input.into_iter() {
+                $($field.push(e.$field);)*
+            }
+            df! {
+                $(stringify!($field) => $field,)*
+            }
+        }
+    };
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Payload {
@@ -33,19 +53,21 @@ struct UniverseData {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GalaxyData {
     #[serde(alias="ID")]
-    id: i64,
-    df: f64,
+    pub id: i64,
+    pub df: f64,
     #[serde(alias="lastUpdate")]
-    last_update: i64,
-    layer: i64,
-    links: Vec<i64>,
-    mapable: Option<bool>,
-    name: String,
-    x: f64,
-    y: f64,
+    pub last_update: i64,
+    pub layer: i64,
+    pub links: Vec<i64>,
+    pub mapable: Option<bool>,
+    pub name: String,
+    pub x: f64,
+    pub y: f64,
 }
 
-fn download_sanitize_galaxy_data(path: &str) -> Vec<GalaxyData> {
+// NOTE: the two below functions first convert to json and then convert to a DF
+// for now this is intentional as the rest of the galaxy API data may be useful in the future
+fn download_sanitize_galaxy_data(path: &str) -> DataFrame {
     let url = reqwest::Url::parse(&*API_GALAXY_URL).unwrap();
     let res = reqwest::blocking::get(url).unwrap().text().unwrap();
 
@@ -60,18 +82,18 @@ fn download_sanitize_galaxy_data(path: &str) -> Vec<GalaxyData> {
     let _ = serde_json::to_writer_pretty(&mut writer, &galaxy_data);
     writer.flush().expect("Unable to write galaxy data to file");
 
-    galaxy_data
+    struct_to_dataframe!(galaxy_data, [name, layer, df]).expect("Unable to convert struct data to dataframe.")
 }
 
-fn load_galaxy_data(path: &str) -> Vec<GalaxyData> {
+fn load_galaxy_data(path: &str) -> DataFrame {
     let file = File::open(path).expect("Unable to open galaxy data file.");
     let reader = BufReader::new(file);
 
     let data: Vec<GalaxyData> = serde_json::from_reader(reader).expect("Unable to read galaxy data file.");
-    data
+    struct_to_dataframe!(data, [name, layer, df]).expect("Unable to convert struct data to dataframe.")
 }
 
-pub fn get_galaxy_data(path: &str) -> Vec<GalaxyData> {
+pub fn get_galaxy_data(path: &str) -> DataFrame {
     if Path::new(path).exists() {
         load_galaxy_data(path)
     } else {
