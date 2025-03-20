@@ -3,7 +3,7 @@ use std::fs::metadata;
 
 use once_cell::sync::Lazy;
 use regex::Regex;
-use rusqlite::Connection;
+use rusqlite::{Connection, params};
 
 
 #[derive(Debug)]
@@ -67,7 +67,7 @@ struct DgLevel {
     galaxy: String,  // galaxy name
     level: String,  // full level name
     guard: String,
-    boss: String,
+    boss: Option<String>,
 }
 
 impl DgLevel {
@@ -83,7 +83,7 @@ impl DgLevel {
             galaxy: dg_packet.galaxy.clone(),
             level: dg_packet.level.clone(),
             guard: "?".to_string(),
-            boss: "".to_string(),
+            boss: None,
         };
 
         println!("New DG Level - galaxy: {} level {} id: {}", data.galaxy, data.level, id);
@@ -110,21 +110,21 @@ impl DgLevel {
             if ship == data.guard {
                 // pass
             } else { // ship does not match existing guard
-                if data.boss == "" {
-                    data.boss = ship.to_string();
-                } else if ship != data.boss {
+                if data.boss.is_none() {
+                    data.boss = Some(ship.to_string());
+                } else if ship != data.boss.unwrap() {
                     panic!("Ship does not match either boss or guard");
                 } else {
-                    data.boss = data.guard;
+                    data.boss = Some(data.guard);
                     data.guard = ship.to_string();
                 }
             }
         }
 
-        if data.boss == "" {
-            println!("\t{}", data.guard);
+        if let Some(ref boss) = data.boss {
+            println!("\t{}, {}", data.guard, boss);
         } else {
-            println!("\t{}, {}", data.guard, data.boss);
+            println!("\t{}", data.guard);
         }
 
         // return data
@@ -136,7 +136,7 @@ impl DgLevel {
             "INSERT OR REPLACE INTO DgData (name, id, room, galaxy, level, guard, boss) 
             SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7
             WHERE NOT EXISTS (SELECT * FROM DgData WHERE name=?1 AND guard<>'?')",
-            (&self.name, &self.id, &self.room, &self.galaxy, &self.level, &self.guard, &self.boss)
+            params![&self.name, &self.id, &self.room, &self.galaxy, &self.level, &self.guard, &self.boss]
         ).unwrap();
         // let _ = db_conn.execute(
         //     "INSERT OR REPLACE INTO DgData (name, id, galaxy, level, guard, boss)

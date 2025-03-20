@@ -14,11 +14,10 @@ use polars::chunked_array::ops::SortMultipleOptions;
 use dg_scanner::ss_api::get_galaxy_data;
 
 fn main() {
-    let LAYER_MAP: DataFrame = df!(
+    let layer_map: DataFrame = df!(
         "layer" => [0i64, 3i64, 4i64, 6i64],
         "layer_name" => ["EF", "WS", "Perilous", "KD"]
-    )
-        .unwrap();
+    ).unwrap();
 
     let mut dest = ArrowDestination::new();
     let source = SQLiteSource::new("raw/dgs.db3", 10).expect("cannont create source");
@@ -64,7 +63,7 @@ fn main() {
             JoinArgs::new(JoinType::Left)
         )
         .join(
-            LAYER_MAP.lazy(),
+            layer_map.lazy(),
             [col("layer")],
             [col("layer")],
             JoinArgs::new(JoinType::Left)
@@ -75,7 +74,7 @@ fn main() {
         .select(
             [
                 cols(["layer_name", "galaxy", "id", "df", "boss"]),
-                all().exclude(["layer_name", "galaxy", "id", "df", "boss"])
+                all().exclude(["layer_name", "galaxy", "id", "df", "boss", "layer"])
             ]
         )
         .collect()
