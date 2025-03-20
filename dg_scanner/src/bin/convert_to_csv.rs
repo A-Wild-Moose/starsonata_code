@@ -1,13 +1,14 @@
 use std::fs::{File, create_dir_all};
 use std::path::Path;
-use std::cmp::Reverse;
 
 // use connectorx::prelude::*;
 use connectorx::destinations::arrow::ArrowDestination;
 use connectorx::sources::sqlite::SQLiteSource;
 use connectorx::transports::SQLiteArrowTransport;
 use connectorx::prelude::Dispatcher;
-use polars::prelude::{SerWriter, CsvWriter, pivot::pivot_stable};
+// use polars::prelude::{SerWriter, CsvWriter, pivot::pivot_stable};
+use polars::prelude::*;
+use polars::prelude::pivot::pivot_stable;
 use polars::chunked_array::ops::SortMultipleOptions;
 
 fn main() {
@@ -18,21 +19,29 @@ fn main() {
     dispatcher.run().expect("run failed");
 
     let mut data = dest.polars().unwrap();
-    // sort
     data = data.sort(
-        ["galaxy", "id", "room"],
+        ["room"],
         SortMultipleOptions::default()
-            .with_order_descending_multi([false, false, true])
+            .with_order_descending(true)
     ).unwrap();
 
-    // let mut data_wide = pivot_stable(&data, ["id"], Some(["room"]), Some(["guard"]), false, None, None).unwrap();
+    // fill boss back in for previous levels
+    data = data
+        .lazy()
+        .with_columns([
+            col("boss").last().over(["galaxy", "id"]),
+        ])
+        .collect()
+        .unwrap();
+
     let mut data_wide = pivot_stable(&data, ["room"], Some(["galaxy", "id", "boss"]), Some(["guard"]), false, None, None).unwrap();
 
-    // re-sort the columns
-    let mut cols = data_wide.get_column_names_str();
-    cols[3..].sort_by_key(|w| Reverse(*w));
-
-    data_wide = data_wide.select(cols).unwrap();
+    // now sort the galaxy/id
+    data_wide = data_wide.sort(
+        ["galaxy", "id"],
+        SortMultipleOptions::default()
+            .with_order_descending_multi([false, false])
+    ).unwrap();
 
     let path = Path::new("raw/dgs.csv");
     create_dir_all(path.parent().unwrap()).unwrap();

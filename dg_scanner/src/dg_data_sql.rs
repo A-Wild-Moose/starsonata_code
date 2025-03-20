@@ -189,22 +189,4 @@ impl<'a> DgData<'a> {
         let dg_level_data = DgLevel::new(dg_multi_packet);
         dg_level_data.add_to_database(&self.db);
     }
-
-    pub fn print_db(&self) {
-        let mut stmt = self.db.prepare("SELECT name, id, guard FROM DgData").unwrap();
-        let dg_iter = stmt.query_map([], |row| {
-            Ok(DgLevel{
-                name: row.get(0)?,
-                id: row.get(1)?,
-                galaxy: "".to_string(),
-                level: "".to_string(),
-                guard: row.get(2)?,
-                boss: "".to_string()
-            })
-        }).unwrap();
-
-        for dg in dg_iter {
-            println!("dg: {:?}", dg.unwrap());
-        }
-    }
 }

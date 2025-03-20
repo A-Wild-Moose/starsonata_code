@@ -2,10 +2,9 @@ use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
-use utils::device::get_pcap_capture;
+use dg_scanner::device::get_pcap_capture;
 // use utils::dg_data::{DgLevel, DgData};
-use utils::dg_data_sql::{DgPacket, DgData};
-mod utils;
+use dg_scanner::dg_data_sql::{DgPacket, DgData};
 
 
 
