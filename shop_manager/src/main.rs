@@ -4,9 +4,100 @@ use std::io::{BufWriter, Write, BufReader, Read};
 use pcap::{Device, Capture};
 use regex::{Regex, Captures, CaptureMatches};
 use once_cell::sync::Lazy;
+use colored::Colorize;
+use thousands::Separable;
+
+
+fn convert_price(a: &str) -> i64 {
+    let b = a.replace(",", "");  // american style, know that these are thousands separators
+
+    if b.ends_with(&['t', 'b','m'][..]) {
+        let (v, suf) = b.split_at_checked(b.len() - 1).unwrap();
+        let mut val = v.parse::<f64>().unwrap();
+        match suf {
+            "t" => val = val * f64::powi(10.0, 12),
+            "b" => val = val * f64::powi(10.0, 9),
+            "m" => val = val * f64::powi(10.0, 6),
+            _ => panic!("unexpected suffix")
+        }
+        val as i64
+    } else {
+        a.parse::<i64>().unwrap()
+    }
+}
+
+fn check_update_price(prices: Vec<i64>, shops: Vec<String>) -> (Option<i64>, Option<i64>, Option<i64>){
+    let original_price = match shops.iter().position(|r| r == "Shadow Shop") {
+        Some(a) => Some(prices[a]),
+        None => None
+    };
+
+    let (cheapest_price, new_price) = if prices.len() > 0 {
+        let np = match shops[0].as_str() {
+            "Shadow Shop" => prices[0],
+            _ => (0.99 * prices[0] as f64) as i64
+        };
+        (Some(prices[0]), Some(np))
+    } else {
+        (None, None)
+    };
+    (original_price, cheapest_price, new_price)
+}
+
+fn print_price_update(item: &str, original: Option<i64>, cheapest: Option<i64>, new: Option<i64>) -> Option<String> {
+    let width = 40;
+    // case 1: original == cheapest == new
+    // case 2: original > cheapest > new
+    // case 3: None, cheapest > new
+    // case 4: none available
+    // sellprice | buyprice | maxbuy | maxsell | maxmake | name
+    let (msg, line) = match (original, cheapest, new) {
+        (Some(o), Some(c), Some(n)) => {
+            match o > c {
+                true => (
+                    format!(
+                        "{:width$} :: original: {:15} cheapest: {:15} now selling: {:15}",
+                        item,
+                        o.separate_with_commas().red(),
+                        c.separate_with_commas().yellow(),
+                        n.separate_with_commas().green()
+                    ),
+                    Some(format!("{n} | 1 | 100 | 0 | 0 | {item}").to_string())
+                ),
+                false => (
+                    format!(
+                        "{:width$} :: original: {:15} cheapest: {:15} now selling: {:15}",
+                        item,
+                        o.separate_with_commas().green(),
+                        c.separate_with_commas().green(),
+                        n.separate_with_commas().green()
+                    ),
+                    Some(format!("{n} | 1 | 100 | 0 | 0 | {item}").to_string())
+                )
+            }
+        },
+        (None, Some(c), Some(n)) => (
+            format!(
+                "{:width$} :: original: {:15} cheapest: {:15} now selling: {:15}",
+                item,
+                "-".red(),
+                c.separate_with_commas().yellow(),
+                n.separate_with_commas().green()
+            ),
+            Some(format!("{n} | 1 | 100 | 0 | 0 | {item}").to_string())
+        ),
+        (None, None, None) => (
+            format!("{:width$} :: {}", item, "no available sale points, manual entry required".red()),
+            None
+        ),
+        _ => panic!("unknown combination of original, cheapest, and new prices.")
+    };
+    println!("{}", msg);
+    line
+}
 
 fn main() {
-    let file = File::open("raw/raw_part.txt").unwrap();
+    let file = File::open("raw/raw.txt").unwrap();
     let mut rdr = BufReader::new(file);
 
     let mut buf: Vec<u8> = vec![];
@@ -23,31 +114,39 @@ fn main() {
         r"  \[..\][ ]*(?<price>[\d\.]*[tbm]?) \(.*\): .*: (?<shop>.*)[\r\n]"
     ).unwrap());
 
+    let mut lines: Vec<String> = Vec::with_capacity(50);
+
     for cmatch in RE_MC.find_iter(&data) {
         let mc_data = cmatch.as_str();
 
         let cap = RE_MC.captures(cmatch.as_str()).unwrap();
         let item = cap.name("item").unwrap().as_str();
 
-        println!("{}, {}, {}", cmatch.start(), cmatch.end(), item);
+        let mut prices: Vec<i64> = Vec::with_capacity(5);
+        let mut shops: Vec<String> = Vec::with_capacity(5);
         
         for shop_caps in RE_shops.captures_iter(mc_data) {
             let (_, [price, shop]) = shop_caps.extract();
-            println!("\t{}, {}", price, shop);
+            prices.push(convert_price(price));
+            shops.push(shop.to_string());
         }
+
+        let (original, cheap, new_price) = check_update_price(prices, shops);
+
+        let line = print_price_update(item, original, cheap, new_price);
+        match line {
+            Some(l) => lines.push(l),
+            None => {}
+        }
+
+        // sellprice | buyprice | maxbuy | maxsell | maxmake | name
+        // println!("{:?} | 1 | 100 | 0 | 0 | {}", new_price, item);
     }
 
-    // for cap in RE_MC.captures_iter(&data) {
-    //     let (_, [item]) = cap.extract();
-    //     let cmatch = cap.get(1).unwrap();
-
-    //     println!("{}, {}, {}", cmatch.start(), cmatch.end(), item);
-
-    //     for shop_caps in RE_shops.captures_iter(&data[cmatch.start()..cmatch.end()]) {
-    //         let (_, [price, shop]) = shop_caps.extract();
-    //         println!("\t{}, {}", price, shop);
-    //     }
-    // }
+    println!("\n\n{}", "sellprice | buyprice | maxbuy | maxsell | maxmake | name");
+    for line in lines.iter() {
+        println!("{}", line);
+    }
 }
 
 fn main1() {
