@@ -1,11 +1,10 @@
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-use std::fs::File;
-use std::io::{BufWriter, Write, BufReader, Read};
-use pcap::{Device, Capture};
-use regex::{Regex, Captures, CaptureMatches};
+use regex::Regex;
 use once_cell::sync::Lazy;
 use colored::Colorize;
 use thousands::Separable;
+
+use shop_manager::device::get_pcap_capture;
 
 
 fn convert_price(a: &str) -> i64 {
@@ -96,51 +95,58 @@ fn print_price_update(item: &str, original: Option<i64>, cheapest: Option<i64>, 
     line
 }
 
+
 fn main() {
-    let file = File::open("raw/raw.txt").unwrap();
-    let mut rdr = BufReader::new(file);
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
 
-    let mut buf: Vec<u8> = vec![];
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
 
-    let _ = rdr.read_to_end(&mut buf).unwrap();
-    let data = String::from_utf8_lossy(&buf);
+    let mut cap = get_pcap_capture();
 
     static RE_MC: Lazy<Regex> = Lazy::new(|| Regex::new(
         r"\x10\x09(?<item>[[:word:] '-]*)[\r\n]{2}   Average(?ms:.*?)Most profitable"
     ).unwrap());
 
     // [ 0]  12.17b (   1): Free Market: Cult of Labrador
-    static RE_shops: Lazy<Regex> = Lazy::new(|| Regex::new(
+    static RE_SHOPS: Lazy<Regex> = Lazy::new(|| Regex::new(
         r"  \[..\][ ]*(?<price>[\d\.]*[tbm]?) \(.*\): .*: (?<shop>.*)[\r\n]"
     ).unwrap());
 
     let mut lines: Vec<String> = Vec::with_capacity(50);
 
-    for cmatch in RE_MC.find_iter(&data) {
-        let mc_data = cmatch.as_str();
 
-        let cap = RE_MC.captures(cmatch.as_str()).unwrap();
-        let item = cap.name("item").unwrap().as_str();
+    while running.load(Ordering::SeqCst) {
+        let Ok(packet) = cap.next_packet() else {
+            continue;
+        };
+        let data = String::from_utf8_lossy(packet.data);
 
-        let mut prices: Vec<i64> = Vec::with_capacity(5);
-        let mut shops: Vec<String> = Vec::with_capacity(5);
-        
-        for shop_caps in RE_shops.captures_iter(mc_data) {
-            let (_, [price, shop]) = shop_caps.extract();
-            prices.push(convert_price(price));
-            shops.push(shop.to_string());
+        for cmatch in RE_MC.find_iter(&data) {
+            let mc_data = cmatch.as_str();
+
+            let cap = RE_MC.captures(cmatch.as_str()).unwrap();
+            let item = cap.name("item").unwrap().as_str();
+
+            let mut prices: Vec<i64> = Vec::with_capacity(5);
+            let mut shops: Vec<String> = Vec::with_capacity(5);
+
+            for shop_caps in RE_SHOPS.captures_iter(mc_data) {
+                let (_, [price, shop]) = shop_caps.extract();
+                prices.push(convert_price(price));
+                shops.push(shop.to_string());
+            }
+    
+            let (original, cheap, new_price) = check_update_price(prices, shops);
+    
+            let line = print_price_update(item, original, cheap, new_price);
+            match line {
+                Some(l) => lines.push(l),
+                None => {}
+            }
         }
-
-        let (original, cheap, new_price) = check_update_price(prices, shops);
-
-        let line = print_price_update(item, original, cheap, new_price);
-        match line {
-            Some(l) => lines.push(l),
-            None => {}
-        }
-
-        // sellprice | buyprice | maxbuy | maxsell | maxmake | name
-        // println!("{:?} | 1 | 100 | 0 | 0 | {}", new_price, item);
     }
 
     println!("\n\n{}", "sellprice | buyprice | maxbuy | maxsell | maxmake | name");
@@ -149,43 +155,94 @@ fn main() {
     }
 }
 
-fn main1() {
 
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
+// fn main2() {
+//     let file = File::open("raw/raw.txt").unwrap();
+//     let mut rdr = BufReader::new(file);
 
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");
+//     let mut buf: Vec<u8> = vec![];
 
-    
-    let mut main_device = Device::lookup().unwrap().unwrap();
-    let devices = Device::list().unwrap();
+//     let _ = rdr.read_to_end(&mut buf).unwrap();
+//     let data = String::from_utf8_lossy(&buf);
 
-    // println!("{}", main_device.name);
+//     static RE_MC: Lazy<Regex> = Lazy::new(|| Regex::new(
+//         r"\x10\x09(?<item>[[:word:] '-]*)[\r\n]{2}   Average(?ms:.*?)Most profitable"
+//     ).unwrap());
 
-    for dev in devices.iter(){
-        // println!("{}, {}", dev.name, dev.desc.clone().unwrap());
-        if dev.desc.clone().unwrap().contains("Mullvad Tunnel") {
-            main_device = dev.clone();
-        }
-    }
+//     // [ 0]  12.17b (   1): Free Market: Cult of Labrador
+//     static RE_shops: Lazy<Regex> = Lazy::new(|| Regex::new(
+//         r"  \[..\][ ]*(?<price>[\d\.]*[tbm]?) \(.*\): .*: (?<shop>.*)[\r\n]"
+//     ).unwrap());
 
-    // capture device
-    let mut cap = Capture::from_device(main_device).unwrap().open().unwrap();
-    
-    // set the filters on the packat reading
-    let _ = cap.filter(
-        "src host 51.222.248.34", true
-    );
+//     let mut lines: Vec<String> = Vec::with_capacity(50);
 
-    let file = File::create("raw/raw.txt").unwrap();
-    let mut wrt = BufWriter::new(&file);
+//     for cmatch in RE_MC.find_iter(&data) {
+//         let mc_data = cmatch.as_str();
 
-    while running.load(Ordering::SeqCst) {
-        let packet = cap.next_packet().unwrap();
-        let data = String::from_utf8_lossy(packet.data);
+//         let cap = RE_MC.captures(cmatch.as_str()).unwrap();
+//         let item = cap.name("item").unwrap().as_str();
+
+//         let mut prices: Vec<i64> = Vec::with_capacity(5);
+//         let mut shops: Vec<String> = Vec::with_capacity(5);
         
-        wrt.write(&packet.data).unwrap();
-    }
-}
+//         for shop_caps in RE_shops.captures_iter(mc_data) {
+//             let (_, [price, shop]) = shop_caps.extract();
+//             prices.push(convert_price(price));
+//             shops.push(shop.to_string());
+//         }
+
+//         let (original, cheap, new_price) = check_update_price(prices, shops);
+
+//         let line = print_price_update(item, original, cheap, new_price);
+//         match line {
+//             Some(l) => lines.push(l),
+//             None => {}
+//         }
+//     }
+
+//     println!("\n\n{}", "sellprice | buyprice | maxbuy | maxsell | maxmake | name");
+//     for line in lines.iter() {
+//         println!("{}", line);
+//     }
+// }
+
+// fn main1() {
+
+//     let running = Arc::new(AtomicBool::new(true));
+//     let r = running.clone();
+
+//     ctrlc::set_handler(move || {
+//         r.store(false, Ordering::SeqCst);
+//     }).expect("Error setting Ctrl-C handler");
+
+    
+//     let mut main_device = Device::lookup().unwrap().unwrap();
+//     let devices = Device::list().unwrap();
+
+//     // println!("{}", main_device.name);
+
+//     for dev in devices.iter(){
+//         // println!("{}, {}", dev.name, dev.desc.clone().unwrap());
+//         if dev.desc.clone().unwrap().contains("Mullvad Tunnel") {
+//             main_device = dev.clone();
+//         }
+//     }
+
+//     // capture device
+//     let mut cap = Capture::from_device(main_device).unwrap().open().unwrap();
+    
+//     // set the filters on the packat reading
+//     let _ = cap.filter(
+//         "src host 51.222.248.34", true
+//     );
+
+//     let file = File::create("raw/raw.txt").unwrap();
+//     let mut wrt = BufWriter::new(&file);
+
+//     while running.load(Ordering::SeqCst) {
+//         let packet = cap.next_packet().unwrap();
+//         let data = String::from_utf8_lossy(packet.data);
+        
+//         wrt.write(&packet.data).unwrap();
+//     }
+// }

@@ -2,30 +2,11 @@ use std::io::{BufWriter, Write, BufReader};
 use std::fs::File;
 use std::path::Path;
 use std::collections::HashMap;
-
-use serde::{Serialize, Deserialize};
 use polars::prelude::*;
 
+use serde::{Serialize, Deserialize};
+
 const API_GALAXY_URL: &str = "https://www.starsonata.com/webapi/galaxies/v1";
-
-// https://stackoverflow.com/questions/73167416/creating-polars-dataframe-from-vecstruct
-macro_rules! struct_to_dataframe {
-    ($input:expr, [$($field:ident),+]) => {
-        {
-            let len = $input.len().to_owned();
-
-            // Extract the field values into separate vectors
-            $(let mut $field = Vec::with_capacity(len);)*
-
-            for e in $input.into_iter() {
-                $($field.push(e.$field);)*
-            }
-            df! {
-                $(stringify!($field) => $field,)*
-            }
-        }
-    };
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Payload {
@@ -67,7 +48,7 @@ pub struct GalaxyData {
 
 // NOTE: the two below functions first convert to json and then convert to a DF
 // for now this is intentional as the rest of the galaxy API data may be useful in the future
-fn download_sanitize_galaxy_data(path: &str) -> DataFrame {
+fn download_galaxy_data(path: &str) {
     let url = reqwest::Url::parse(&*API_GALAXY_URL).unwrap();
     let res = reqwest::blocking::get(url).unwrap().text().unwrap();
 
@@ -81,22 +62,16 @@ fn download_sanitize_galaxy_data(path: &str) -> DataFrame {
 
     let _ = serde_json::to_writer_pretty(&mut writer, &galaxy_data);
     writer.flush().expect("Unable to write galaxy data to file");
-
-    struct_to_dataframe!(galaxy_data, [name, layer, df]).expect("Unable to convert struct data to dataframe.")
 }
 
 fn load_galaxy_data(path: &str) -> DataFrame {
-    let file = File::open(path).expect("Unable to open galaxy data file.");
-    let reader = BufReader::new(file);
-
-    let data: Vec<GalaxyData> = serde_json::from_reader(reader).expect("Unable to read galaxy data file.");
-    struct_to_dataframe!(data, [name, layer, df]).expect("Unable to convert struct data to dataframe.")
+    let mut file = std::fs::File::open("raw/api_galaxy_data.json").unwrap(); 
+    JsonReader::new(&mut file).finish().unwrap()
 }
 
 pub fn get_galaxy_data(path: &str) -> DataFrame {
-    if Path::new(path).exists() {
-        load_galaxy_data(path)
-    } else {
-        download_sanitize_galaxy_data(path)
+    if !Path::new(path).exists() {
+        download_galaxy_data(path);
     }
+    load_galaxy_data(path)
 }
