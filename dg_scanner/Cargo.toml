@@ -3,6 +3,13 @@ name = "dg_scanner"
 version = "0.1.0"
 edition = "2024"
 
+[profile.release]
+debug = false
+strip = true
+opt-level = "z"
+codegen-units = 1
+lto = true
+
 [dependencies]
 connectorx = { version = "0.4.2", features = ["src_sqlite", "dst_polars"] }
 ctrlc = "3.4.5"
