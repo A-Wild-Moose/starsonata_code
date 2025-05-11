@@ -13,7 +13,19 @@ use polars::chunked_array::ops::SortMultipleOptions;
 
 use dg_scanner::ss_api::get_galaxy_data;
 
+
+// fn series_diff(a: &Series) -> Series {
+//     let mut x = a
+//         .into_iter()
+//         .map()
+// }
+
 fn main() {
+    unsafe{
+        std::env::set_var("POLARS_FMT_MAX_ROWS", "20");
+        std::env::set_var("POLARS_FMT_MAX_COLS", "15");
+    }
+
     let layer_map: DataFrame = df!(
         "layer" => [0i64, 3i64, 4i64, 6i64],
         "layer_name" => ["EF", "WS", "Perilous", "KD"]
@@ -27,41 +39,119 @@ fn main() {
 
     let mut data = dest.polars().unwrap();
     data = data.sort(
-        ["room"],
+        ["id", "room"],
         SortMultipleOptions::default()
-            .with_order_descending(true)
+            .with_order_descending_multi([false, true])
     ).unwrap();
 
-    // fill boss back in for previous levels
+    let galaxy_data = get_galaxy_data("raw/api_galaxy_data.json");
+
+    // lots of instructions here to create the proper offset for sorting rooms neatly with no gaps
     data = data
         .lazy()
         .with_columns([
-            col("boss").last().over(["galaxy", "id"]),
+            // create a clean id for the entire DG
+            col("id").str().extract(lit("[0-9]*"), 0).alias("clean_id"),
+            // add an A to the ID so that boss propagates all the way as necessary
+            when(not(col("id").str().contains(lit("[A-Z]"), true)))
+                .then(col("id") + lit("A"))
+                .otherwise(col("id")),
+            (lit("DG ") + col("name")).alias("proper_name")
         ])
-        .collect()
-        .unwrap();
-
-    let mut data_wide = pivot_stable(&data, ["room"], Some(["galaxy", "id", "boss"]), Some(["guard"]), false, None, None).unwrap();
-
-    // now sort the galaxy/id
-    data_wide = data_wide.sort(
-        ["galaxy", "id"],
-        SortMultipleOptions::default()
-            .with_order_descending_multi([false, false])
-    ).unwrap();
-
-    // get the galaxy information from the SS API
-    let galaxy_data = get_galaxy_data("raw/api_galaxy_data.json");
-
-    // get the layer/df information
-    data_wide = data_wide
-        .lazy()
         .join(
-            galaxy_data.lazy(),
-            [col("galaxy")],
+            galaxy_data.clone().lazy().select([col("name"), col("links")]),
+            [col("proper_name")],
             [col("name")],
             JoinArgs::new(JoinType::Left)
         )
+        .with_columns([
+            // get the parent galaxy
+            // TODO verify that this is always the first in the list
+            col("links").list().first().alias("parent_id"),
+            // boss to all the rooms
+            col("boss").last().over(["galaxy", "id"])
+        ])
+        .select([all().exclude(["links"])])
+        .join(
+            galaxy_data.lazy().select([col("id"), col("name"), col("df"), col("layer")]).rename(["name"], ["parent_name"], true),
+            [col("parent_id")],
+            [col("id")],
+            JoinArgs::new(JoinType::Left)
+        )
+        .with_columns([
+            // Get the level of the parent galaxy for dg levels. Need 2 steps here because 
+            // of numbers in galaxy names, etc.
+            col("parent_name")
+                .str()
+                .extract(lit("[0-9]{1,2}\\.[0-9]"), 0)
+                .str()
+                .extract(lit("[0-9]{1,2}"), 0)
+                .cast(DataType::Int64)
+                .alias("parent_room")
+        ])
+        .with_columns([
+            // fill nulls in the parent room
+            when(is_null(col("parent_room")))
+                .then(col("room") + lit(1))
+                .otherwise(col("parent_room"))
+                .alias("parent_room")
+        ])
+        .with_columns([
+            // first offset
+            (col("parent_room") - col("room") - lit(1))
+                .cum_sum(false)
+                .over(["galaxy", "id"])
+                .alias("offset")
+        ])
+        .with_columns([
+            (col("room").max().over(["galaxy", "clean_id"]) - col("room") + lit(1) - col("offset")).alias("room_asc")
+        ])
+        // need to collect here, as we need some of the data to get the offsets offset
+        // for splits in galaxies
+        .collect()
+        .unwrap();
+    
+    // get a subset of the data we can use to merge in to get offsets of parents 
+    // where necessary
+    let subset = data
+        .clone()
+        .lazy()
+        .select([
+            cols(["name", "proper_name", "parent_name", "offset"])
+        ])
+        .unique(None, UniqueKeepStrategy::First)
+        .rename(["offset"], ["offset2"], true)
+        .collect()
+        .unwrap();
+    
+    // back to merging this in with the data
+    data = data
+        .lazy()
+        .join(
+            subset.lazy(),
+            [col("parent_name")],
+            [col("proper_name")],
+            JoinArgs::new(JoinType::Left)
+        )
+        .with_columns([
+            col("offset2")
+                .fill_null(lit(0))
+                .first()
+                .over(["galaxy", "id"])
+        ])
+        .with_columns([
+            col("room_asc") - col("offset2"),
+            col("name").first().over(["galaxy", "clean_id"]),
+            col("df").first().over(["galaxy", "clean_id"])
+        ])
+        .collect()
+        .unwrap();
+    
+    // pivot to the wider view for saving
+    let mut data_wide = pivot_stable(&data, ["room_asc"], Some(["name", "id", "df", "layer", "boss"]), Some(["guard"]), false, None, None).unwrap();
+    // join with the layer information
+    data_wide = data_wide
+        .lazy()
         .join(
             layer_map.lazy(),
             [col("layer")],
@@ -71,14 +161,29 @@ fn main() {
         .with_columns([
             col("df") * lit(100)
         ])
-        .select(
-            [
-                cols(["layer_name", "galaxy", "id", "df", "boss"]),
-                all().exclude(["layer_name", "galaxy", "id", "df", "boss", "layer"])
-            ]
+        .select([
+            cols(["layer_name", "name", "id", "df", "boss"]),
+            all().exclude(["layer_name", "name", "id", "df", "boss"])
+        ])
+        .sort(
+            ["df", "name", "id"],
+            SortMultipleOptions::default()
+                .with_order_descending_multi([false, false, false])
         )
+        .with_columns([
+            int_range(lit(0), len(), 1, DataType::Int64).over(["name"]).alias("_range")
+        ])
+        .with_columns([
+            when(col("_range").eq(0))
+                .then(col("name"))
+                .otherwise(lit(NULL))
+                .alias("name")
+        ])
+        .select([
+            all().exclude(["_range"])
+        ])
         .collect()
-        .expect("Unable to join DG data with Galaxy data.");
+        .unwrap();
 
     let path = Path::new("raw/dgs.csv");
     create_dir_all(path.parent().unwrap()).unwrap();
