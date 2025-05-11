@@ -1,4 +1,4 @@
-use std::io::{BufWriter, Write, BufReader};
+use std::io::{BufWriter, Write};
 use std::fs::File;
 use std::path::Path;
 use std::collections::HashMap;
@@ -65,7 +65,7 @@ fn download_galaxy_data(path: &str) {
 }
 
 fn load_galaxy_data(path: &str) -> DataFrame {
-    let mut file = std::fs::File::open("raw/api_galaxy_data.json").unwrap(); 
+    let mut file = std::fs::File::open(path).unwrap(); 
     JsonReader::new(&mut file).finish().unwrap()
 }
 
