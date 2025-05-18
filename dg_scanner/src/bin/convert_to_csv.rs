@@ -14,10 +14,11 @@ use polars::chunked_array::ops::SortMultipleOptions;
 use dg_scanner::ss_api::get_galaxy_data;
 
 
-fn get_subset_galaxy_data(path: &str, galaxies: Series) -> DataFrame {
-    let mut galaxy_data = get_galaxy_data(path);
+fn get_subset_galaxy_data(path: &str, galaxies: Series) -> (DataFrame, DataFrame) {
+    let galaxy_data = get_galaxy_data(path);
 
-    galaxy_data
+    let data_subset = galaxy_data
+        .clone()
         .lazy()
         .filter(
             col("name").str().starts_with(lit("DG "))
@@ -34,7 +35,9 @@ fn get_subset_galaxy_data(path: &str, galaxies: Series) -> DataFrame {
             col("galaxy").is_in(lit(galaxies))
         )
         .collect()
-        .unwrap()
+        .unwrap();
+
+        (galaxy_data, data_subset)
 }
 
 
@@ -67,14 +70,14 @@ fn main() {
         .unique()
         .unwrap();
 
-    let galaxy_data = get_subset_galaxy_data("raw/api_galaxy_data.json", galaxy_series);
+    let (full_galaxy_data, dg_galaxy_data) = get_subset_galaxy_data("raw/api_galaxy_data.json", galaxy_series);
 
     // lots of instructions here to create the proper offset for sorting rooms neatly with no gaps
     data = data
         .lazy()
         .with_columns([(lit("DG ") + col("name")).alias("proper_name")])
         .join(
-            galaxy_data.clone().lazy().select([cols(["name", "galaxy", "links", "df", "layer"])]),
+            dg_galaxy_data.clone().lazy().select([cols(["name", "galaxy", "links", "layer"])]),
             [col("proper_name"), col("galaxy")],
             [col("name"), col("galaxy")],
             JoinArgs::new(JoinType::Full)
@@ -125,7 +128,7 @@ fn main() {
         ])
         .select([all().exclude(["links"])])
         .join(
-            galaxy_data.lazy().select([col("id"), col("name")]).rename(["name"], ["parent_name"], true),
+            full_galaxy_data.lazy().select([col("id"), col("name"), col("df")]).rename(["name"], ["parent_name"], true),
             [col("parent_id")],
             [col("id")],
             JoinArgs::new(JoinType::Left)
@@ -139,7 +142,9 @@ fn main() {
                 .str()
                 .extract(lit("[0-9]{1,2}"), 0)
                 .cast(DataType::Int64)
-                .alias("parent_room")
+                .alias("parent_room"),
+            // make the DF calculation update so that it represents what players see
+            col("df") * lit(10)
         ])
         .with_columns([
             // fill nulls in the parent room
