@@ -14,18 +14,31 @@ use polars::chunked_array::ops::SortMultipleOptions;
 use dg_scanner::ss_api::get_galaxy_data;
 
 
-// fn series_diff(a: &Series) -> Series {
-//     let mut x = a
-//         .into_iter()
-//         .map()
-// }
+fn get_subset_galaxy_data(path: &str, galaxies: Series) -> DataFrame {
+    let mut galaxy_data = get_galaxy_data(path);
+
+    galaxy_data
+        .lazy()
+        .filter(
+            col("name").str().starts_with(lit("DG "))
+        )
+        .with_columns([
+            col("name")
+                .str()
+                .strip_prefix(lit("DG "))
+                .str()
+                .replace(lit(" [0-9]{1,2}\\.[0-9]{1,4}[A-D]?"), lit(""), false)
+                .alias("galaxy")
+        ])
+        .filter(
+            col("galaxy").is_in(lit(galaxies))
+        )
+        .collect()
+        .unwrap()
+}
+
 
 fn main() {
-    unsafe{
-        std::env::set_var("POLARS_FMT_MAX_ROWS", "20");
-        std::env::set_var("POLARS_FMT_MAX_COLS", "15");
-    }
-
     let layer_map: DataFrame = df!(
         "layer" => [0i64, 3i64, 4i64, 6i64],
         "layer_name" => ["EF", "WS", "Perilous", "KD"]
@@ -38,17 +51,63 @@ fn main() {
     dispatcher.run().expect("run failed");
 
     let mut data = dest.polars().unwrap();
-    data = data.sort(
-        ["id", "room"],
-        SortMultipleOptions::default()
-            .with_order_descending_multi([false, true])
-    ).unwrap();
+    // data = data.sort(
+    //     ["id", "room"],
+    //     SortMultipleOptions::default()
+    //         .with_order_descending_multi([false, true])
+    // ).unwrap();
 
-    let galaxy_data = get_galaxy_data("raw/api_galaxy_data.json");
+    // get the galaxies that are mapped. This may include some DGs that haven't been mapped but
+    // are in a galaxy with multiple dgs. Accepting this for now
+    let galaxy_series = data
+        .column("galaxy")
+        .unwrap()
+        .as_materialized_series()
+        .clone()
+        .unique()
+        .unwrap();
+
+    let galaxy_data = get_subset_galaxy_data("raw/api_galaxy_data.json", galaxy_series);
 
     // lots of instructions here to create the proper offset for sorting rooms neatly with no gaps
     data = data
         .lazy()
+        .with_columns([(lit("DG ") + col("name")).alias("proper_name")])
+        .join(
+            galaxy_data.clone().lazy().select([cols(["name", "galaxy", "links", "df", "layer"])]),
+            [col("proper_name"), col("galaxy")],
+            [col("name"), col("galaxy")],
+            JoinArgs::new(JoinType::Full)
+                .with_coalesce(JoinCoalesce::CoalesceColumns)  // combines columns in the left/right join by
+        )
+        // re-create some values when we are filling in missing DG levels
+        .with_columns([
+            when(is_null(col("name")))
+                .then(col("proper_name").str().strip_prefix(lit("DG ")))
+                .otherwise(col("name"))
+                .alias("name"),
+            when(is_null(col("level")))
+                .then(col("proper_name").str().extract(lit("[0-9]{1,2}\\.[0-9]{1,4}[A-D]?"), 0))
+                .otherwise(col("level"))
+                .alias("level")
+        ])
+        .with_columns([
+            when(is_null(col("id")))
+                .then(col("level").str().split(lit(".")).list().last())
+                .otherwise(col("id"))
+                .alias("id"),
+            when(is_null(col("room")))
+                .then(col("level").str().extract(lit("[0-9]{1,2}"), 0))
+                .otherwise(col("room"))
+                .cast(DataType::Int64)
+                .alias("room")
+        ])
+        .sort(
+            ["id", "room"],
+            SortMultipleOptions::default()
+                .with_order_descending_multi([false, true])
+        )
+        // now back to handling rooms etc
         .with_columns([
             // create a clean id for the entire DG
             col("id").str().extract(lit("[0-9]*"), 0).alias("clean_id"),
@@ -56,14 +115,7 @@ fn main() {
             when(not(col("id").str().contains(lit("[A-Z]"), true)))
                 .then(col("id") + lit("A"))
                 .otherwise(col("id")),
-            (lit("DG ") + col("name")).alias("proper_name")
         ])
-        .join(
-            galaxy_data.clone().lazy().select([col("name"), col("links")]),
-            [col("proper_name")],
-            [col("name")],
-            JoinArgs::new(JoinType::Left)
-        )
         .with_columns([
             // get the parent galaxy
             // TODO verify that this is always the first in the list
@@ -73,7 +125,7 @@ fn main() {
         ])
         .select([all().exclude(["links"])])
         .join(
-            galaxy_data.lazy().select([col("id"), col("name"), col("df"), col("layer")]).rename(["name"], ["parent_name"], true),
+            galaxy_data.lazy().select([col("id"), col("name")]).rename(["name"], ["parent_name"], true),
             [col("parent_id")],
             [col("id")],
             JoinArgs::new(JoinType::Left)
@@ -159,7 +211,7 @@ fn main() {
             JoinArgs::new(JoinType::Left)
         )
         .with_columns([
-            col("df") * lit(100)
+            col("df") * lit(10)  // *100 / 10 for first level of DG being 10x higher than the connecting galaxy
         ])
         .select([
             cols(["layer_name", "name", "id", "df", "boss"]),
