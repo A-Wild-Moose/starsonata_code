@@ -31,11 +31,10 @@ impl DgPacket {
         static RE_END: Lazy<Regex> = Lazy::new(|| Regex::new(r"Entering DG (?<dg_gal>[[:word:]' ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)\.[\x00-\x1F]").unwrap());
 
         if let Some(m) = RE_START.find(a) {
+            self.reset();
             self.packet.push_str(&a[m.start()..]);
             self.in_progress = true;
-        }
-
-        if self.in_progress {
+        } else if self.in_progress {
             self.packet.push_str(a);
         }
 
@@ -60,7 +59,7 @@ impl DgPacket {
 }
 
 #[derive(Debug)]
-struct DgLevel {
+pub struct DgLevel {
     name: String,  // galaxy + level
     id: String,  // decimal ID
     room: i16, // room ID
@@ -90,7 +89,7 @@ impl DgLevel {
 
         // handle the ships now
         static RE_SHIPS: Lazy<Regex> = Lazy::new(|| Regex::new(
-            r"DX[0-9]{1,5}\u0000(?s:.*?)[\x00-\x1F](?<ship>[[:word:]'\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Capital Ship|Organic)"
+            r"DX[0-9]{1,5}\u0000(?s:.*?)[\x00-\x1F](?<ship>[[:word:]'\. ]*)\u0000(Light Fighter|Heavy Fighter|Support Freighter|Industrial Freighter|Capital Ship|Organic)"
         ).unwrap());
 
         let mut caps_ship = RE_SHIPS.captures_iter(&dg_packet.packet);
@@ -109,11 +108,12 @@ impl DgLevel {
 
             if ship == data.guard {
                 // pass
+            } else if data.guard.contains(ship) { // pass for stuff like decrepit phoenix
             } else { // ship does not match existing guard
                 if data.boss.is_none() {
                     data.boss = Some(ship.to_string());
-                } else if ship != data.boss.unwrap() {
-                    panic!("Ship does not match either boss or guard");
+                } else if ship != data.boss.clone().unwrap() {
+                    panic!("Ship [{}] does not match either boss [{:?}] or guard [{}]", ship, data.boss.clone().unwrap(), data.guard.clone());
                 } else {
                     data.boss = Some(data.guard);
                     data.guard = ship.to_string();
