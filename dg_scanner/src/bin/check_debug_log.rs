@@ -1,9 +1,6 @@
 use std::fs::File;
 use std::io::{BufReader, Read};
 
-use once_cell::sync::Lazy;
-use regex::Regex;
-
 use dg_scanner::dg_data_sql::{DgPacket, DgLevel};
 
 fn main() {
@@ -19,7 +16,7 @@ fn main() {
     for packet in data.split("\n\n") {
         dgp.accumulate(&packet);
         if dgp.complete {
-            let dg_level_data = DgLevel::new(&dgp);
+            let _dg_level_data = DgLevel::new(&dgp);
             dgp.reset();
         }
     }
