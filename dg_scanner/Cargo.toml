@@ -7,8 +7,8 @@ edition = "2024"
 debug = false
 strip = true
 opt-level = "z"
-codegen-units = 1
-lto = true
+codegen-units = 16  # default for release, was set to 1 earlier
+lto = false
 
 [dependencies]
 connectorx = { version = "0.4.2", features = ["src_sqlite", "dst_polars"] }
