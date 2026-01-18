@@ -28,7 +28,7 @@ impl DgPacket {
 
     pub fn accumulate(&mut self, a: &str) {
         static RE_START: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\x00-\x1F]DG ").unwrap());
-        static RE_END: Lazy<Regex> = Lazy::new(|| Regex::new(r"Entering DG (?<dg_gal>[[:word:]' ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)\.[\x00-\x1F]").unwrap());
+        static RE_END: Lazy<Regex> = Lazy::new(|| Regex::new(r"Entering DG (?<dg_gal>[[:word:]'\- ]*) (?<dg_level>[0-9]{1,2}\.[0-9]+[A-Z]?)\.[\x00-\x1F]").unwrap());
 
         if let Some(m) = RE_START.find(a) {
             self.reset();

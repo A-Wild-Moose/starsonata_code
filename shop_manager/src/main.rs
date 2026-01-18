@@ -35,7 +35,7 @@ fn check_update_price(prices: Vec<i64>, shops: Vec<String>) -> (Option<i64>, Opt
         let np = match shops[0].as_str() {
             "Shadow Shop" => prices[0],
             // "SPEXual Healing (stocking)" => prices[0],
-            "KMART" => prices[0],
+            "need something?" => prices[0],
             "YP Shop" => prices[0],
             "Slade's Shop" => prices[0],
             "zel fine dining" => prices[0],
@@ -43,6 +43,8 @@ fn check_update_price(prices: Vec<i64>, shops: Vec<String>) -> (Option<i64>, Opt
             "Pun and Done" => prices[0],
             "Firestar Base" => prices[0],
             "BASED" => prices[0],
+            "Maly Shop" => prices[0],
+            "pp" => prices[0],
             _ => (0.99 * prices[0] as f64) as i64
         };
         (Some(prices[0]), Some(np))
