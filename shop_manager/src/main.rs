@@ -45,6 +45,7 @@ fn check_update_price(prices: Vec<i64>, shops: Vec<String>) -> (Option<i64>, Opt
             "BASED" => prices[0],
             "Maly Shop" => prices[0],
             "pp" => prices[0],
+            "Pete's Place" => prices[0],
             _ => (0.99 * prices[0] as f64) as i64
         };
         (Some(prices[0]), Some(np))
