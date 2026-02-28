@@ -1118,7 +1118,6 @@ name = "prod_logger"
 version = "0.1.0"
 dependencies = [
  "ctrlc",
- "once_cell",
  "pcap",
  "regex",
  "serenity",

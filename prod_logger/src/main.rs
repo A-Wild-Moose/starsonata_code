@@ -1,8 +1,8 @@
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{LazyLock, Arc, atomic::{AtomicBool, Ordering}};
 use std::io::{Write, BufWriter, BufReader, Read};
 use std::fs::File;
 use regex::Regex;
-use once_cell::sync::Lazy;
+// use once_cell::sync::Lazy;
 
 use tokio::signal;
 
@@ -16,35 +16,6 @@ struct Handler;
 
 use prod_logger::device::get_pcap_capture;
 
-// fn main() {
-//     let running = Arc::new(AtomicBool::new(true));
-//     let r = running.clone();
-
-//     ctrlc::set_handler(move || {
-//         r.store(false, Ordering::SeqCst);
-//     }).expect("Error setting Ctrl-C handler");
-
-//     let mut cap = get_pcap_capture();
-
-//     static RE_MC: Lazy<Regex> = Lazy::new(|| Regex::new(
-//         r"\x10\x09(?<item>[[:word:] '-]*)[\r\n]{2}   Average(?ms:.*?)Most profitable"
-//     ).unwrap());
-
-//     // [ 0]  12.17b (   1): Free Market: Cult of Labrador
-//     static RE_SHOPS: Lazy<Regex> = Lazy::new(|| Regex::new(
-//         r"  \[..\][ ]*(?<price>[\d\.]*[tbm]?) \(.*\): .*: (?<shop>.*)[\r\n]"
-//     ).unwrap());
-
-//     let mut lines: Vec<String> = Vec::with_capacity(50);
-
-
-//     while running.load(Ordering::SeqCst) {
-//         let Ok(packet) = cap.next_packet() else {
-//             continue;
-//         };
-//         let data = String::from_utf8_lossy(packet.data);
-//     }
-// }
 
 fn main1() {
 
@@ -77,22 +48,27 @@ async fn listen_for_prod(ctx: Context, channel_id: ChannelId) {
     let _ = rdr.read_to_end(&mut buf).unwrap();
     let data = String::from_utf8_lossy(&buf);
 
-    static RE_TRANSFER_TO: Lazy<Regex> = Lazy::new(|| Regex::new(
+    static RE_TRANSFER_TO: LazyLock<Regex> = LazyLock::new(|| Regex::new(
         r"\+(?<player>[[:word:] '-_]*) transferred (?<quant>[0-9]?) (?<item>[[:word:] '-]*) to base"
     ).unwrap());
-    static RE_TRANSFER_OUT: Lazy<Regex> = Lazy::new(|| Regex::new(
+    static RE_TRANSFER_OUT: LazyLock<Regex> = LazyLock::new(|| Regex::new(
         r"\+(?<player>[[:word:] '-_]*) transferred (?<quant>[0-9]?) (?<item>[[:word:] '-]*) out of base"
     ).unwrap());
-    static RE_USING_BP: Lazy<Regex> = Lazy::new(|| Regex::new(
+    static RE_USING_BP: LazyLock<Regex> = LazyLock::new(|| Regex::new(
         r"\+(?<player>[[:word:] '-_]*) using (?<item>[[:word:] '-]*) Blueprint"
     ).unwrap());
-    static RE_CONSTRUCTING: Lazy<Regex> = Lazy::new(|| Regex::new(
+    static RE_CONSTRUCTING: LazyLock<Regex> = LazyLock::new(|| Regex::new(
         r"\+(?<player>[[:word:] '-_]*) constructing (?<item>[[:word:] '-]*)\x00"
     ).unwrap());
-    static RE_CONSTRUCTION_DONE: Lazy<Regex> = Lazy::new(|| Regex::new(
+    static RE_CONSTRUCTION_DONE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
         r"\+Construction finished on (?<quant>[0-9]?) (?<item>[[:word:] '-]*)\x00"
     ).unwrap());
-    // TODO: need one for transfering credits in/out
+    static RE_CREDITS_ADD: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+        r"\+(?<player>[[:word:] '-_]*) transferred (?<quant>[[0-9],]?) credits to base"
+    ).unwrap());
+    static RE_CREDITS_TAKE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+        r"\+(?<player>[[:word:] '-_]*) took (?<quant>[[0-9],]?) credits from base"
+    ).unwrap());
 
     for cap in RE_TRANSFER_TO.captures_iter(&data){
         // let tt = cap.get_match().as_str();
@@ -100,8 +76,6 @@ async fn listen_for_prod(ctx: Context, channel_id: ChannelId) {
         let quant = cap.name("quant").unwrap().as_str();
         let item = cap.name("item").unwrap().as_str();
 
-        // println!("{}", tt);
-        println!("player: {}, quantity: {}, item: {}\n", player, quant, item);
         let resp = MessageBuilder::new()
             .push_bold_safe(player)
             .push(" transferred ")
@@ -122,16 +96,36 @@ async fn listen_for_prod(ctx: Context, channel_id: ChannelId) {
         let quant = cap.name("quant").unwrap().as_str();
         let item = cap.name("item").unwrap().as_str();
 
-        // println!("{}", to);
-        println!("player: {}, quantity: {}, item: {}\n", player, quant, item);
+        let resp = MessageBuilder::new()
+            .push_bold_safe(player)
+            .push(" transferred ")
+            .push_italic_safe(quant)
+            .push(" ")
+            .push_italic_safe(item)
+            .push(" out of base")
+            .build();
+        
+        if let Err(why) = channel_id.say(&ctx.http, &resp).await {
+            println!("Error sending messsage: {why:?}");
+        }
+        
     }
     for cap in RE_USING_BP.captures_iter(&data){
         // let ubp = cap.get_match().as_str();
         let player = cap.name("player").unwrap().as_str();
         let item = cap.name("item").unwrap().as_str();
 
-        // println!("{}", ubp);
-        println!("player: {}, item: {} Blueprint\n", player, item);
+        let resp = MessageBuilder::new()
+            .push_bold_safe(player)
+            .push(" using ")
+            .push_italic_safe(item)
+            .push(" Blueprint")
+            .build();
+        
+        if let Err(why) = channel_id.say(&ctx.http, &resp).await {
+            println!("Error sending messsage: {why:?}");
+        }
+        
     }
 }
 
@@ -171,17 +165,11 @@ impl EventHandler for Handler {
             }
         }
         let guild_id = guild_id_.expect("Specified guild not found.");
-        
-        // for guild_id in ready.guilds {
-        //     let guild = guild_id.id.to_partial_guild(&ctx.http).await.unwrap();
-        //     println!("{}", guild.name);
 
-        //     let channels_ = guild.channels(&ctx.http).await.unwrap();
-        //     let (channel_id, channel) = channels_.iter().find(|&(_, x)| x.name == "prod_log").expect("Specified channel not found");
-        //     // println!("{:?}", channel);
+        let channels_ = guild_id.channels(&ctx.http).await.unwrap();
+        let (channel_id, channel) = channels_.iter().find(|&(_, x)| x.name == "prod_log").expect("Specified channel not found");
 
-        //     listen_for_prod(ctx, *channel_id);
-        // }
+        listen_for_prod(ctx, *channel_id).await;
     }
 }
 
