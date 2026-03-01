@@ -1,8 +1,7 @@
 use std::sync::{LazyLock, Arc, atomic::{AtomicBool, Ordering}};
 use std::io::{Write, BufWriter, BufReader, Read};
 use std::fs::File;
-use regex::Regex;
-// use once_cell::sync::Lazy;
+use regex::{Regex, RegexSet};
 
 use tokio::signal;
 
@@ -39,6 +38,36 @@ fn main1() {
     }
 }
 
+struct Sire { // Station Interaction REgex
+    set: RegexSet,
+    transfer: Regex,
+    use_bp: Regex,
+    construct: Regex,
+    construct_done: Regex,
+    transfer_credits: Regex
+}
+
+impl Sire {
+    fn new() -> Self {
+        let pats = vec![
+            r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[0-9]+) (?<item>[[:word:] '\-]*) (?<dir>(to|out of)) base",
+            r"\+(?<player>[[:word:] '\-_]*) using (?<item>[[:word:] '\-]*) Blueprint",
+            r"\+(?<player>[[:word:] '\-_]*) constructing (?<item>[[:word:] '\-]*)\x00",
+            r"\+Construction finished on (?<quant>[0-9]?) (?<item>[[:word:] '\-]*)\x00",
+            r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[[0-9],]?) credits (?<dir>(to|from)) base"
+        ];
+        Self {
+            set: RegexSet::new(pats.clone()).unwrap(),
+            transfer: Regex::new(pats[0]).unwrap(),
+            use_bp: Regex::new(pats[1]).unwrap(),
+            construct: Regex::new(pats[2]).unwrap(),
+            construct_done: Regex::new(pats[3]).unwrap(),
+            transfer_credits: Regex::new(pats[4]).unwrap()
+        }
+    }
+}
+
+
 async fn listen_for_prod(ctx: Context, channel_id: ChannelId) {
     let file = File::open("raw/raw_transfer_equip.txt").unwrap();
     let mut rdr = BufReader::new(file);
@@ -48,85 +77,100 @@ async fn listen_for_prod(ctx: Context, channel_id: ChannelId) {
     let _ = rdr.read_to_end(&mut buf).unwrap();
     let data = String::from_utf8_lossy(&buf);
 
-    static RE_TRANSFER_TO: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-        r"\+(?<player>[[:word:] '-_]*) transferred (?<quant>[0-9]?) (?<item>[[:word:] '-]*) to base"
-    ).unwrap());
-    static RE_TRANSFER_OUT: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-        r"\+(?<player>[[:word:] '-_]*) transferred (?<quant>[0-9]?) (?<item>[[:word:] '-]*) out of base"
-    ).unwrap());
-    static RE_USING_BP: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-        r"\+(?<player>[[:word:] '-_]*) using (?<item>[[:word:] '-]*) Blueprint"
-    ).unwrap());
-    static RE_CONSTRUCTING: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-        r"\+(?<player>[[:word:] '-_]*) constructing (?<item>[[:word:] '-]*)\x00"
-    ).unwrap());
-    static RE_CONSTRUCTION_DONE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-        r"\+Construction finished on (?<quant>[0-9]?) (?<item>[[:word:] '-]*)\x00"
-    ).unwrap());
-    static RE_CREDITS_ADD: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-        r"\+(?<player>[[:word:] '-_]*) transferred (?<quant>[[0-9],]?) credits to base"
-    ).unwrap());
-    static RE_CREDITS_TAKE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-        r"\+(?<player>[[:word:] '-_]*) took (?<quant>[[0-9],]?) credits from base"
-    ).unwrap());
+    static SIRE: LazyLock<Sire> = LazyLock::new(|| Sire::new());
 
-    for cap in RE_TRANSFER_TO.captures_iter(&data){
-        // let tt = cap.get_match().as_str();
-        let player = cap.name("player").unwrap().as_str();
-        let quant = cap.name("quant").unwrap().as_str();
-        let item = cap.name("item").unwrap().as_str();
+    // static RE_PATTERNS: LazyLock<Vec<&str>> = LazyLock::new(|| vec![
+    //     r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[0-9]+) (?<item>[[:word:] '\-]*) (?<dir>(to|out of)) base",
+    //     r"\+(?<player>[[:word:] '\-_]*) using (?<item>[[:word:] '\-]*) Blueprint",
+    //     r"\+(?<player>[[:word:] '\-_]*) constructing (?<item>[[:word:] '\-]*)\x00",
+    //     r"\+Construction finished on (?<quant>[0-9]?) (?<item>[[:word:] '\-]*)\x00",
+    //     r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[[0-9],]?) credits (?<dir>(to|from)) base"
+    // ]);
 
-        let resp = MessageBuilder::new()
-            .push_bold_safe(player)
-            .push(" transferred ")
-            .push_italic_safe(quant)
-            .push(" ")
-            .push_italic_safe(item)
-            .push(" to base")
-            .build();
-        
-        if let Err(why) = channel_id.say(&ctx.http, &resp).await {
-            println!("Error sending messsage: {why:?}");
-        }
-        
-    }
-    for cap in RE_TRANSFER_OUT.captures_iter(&data){
-        // let to = cap.get_match().as_str();
-        let player = cap.name("player").unwrap().as_str();
-        let quant = cap.name("quant").unwrap().as_str();
-        let item = cap.name("item").unwrap().as_str();
+    // static RE_SET: LazyLock<RegexSet> = LazyLock::new(|| RegexSet::new(RE_PATTERNS).unwrap());
 
-        let resp = MessageBuilder::new()
-            .push_bold_safe(player)
-            .push(" transferred ")
-            .push_italic_safe(quant)
-            .push(" ")
-            .push_italic_safe(item)
-            .push(" out of base")
-            .build();
-        
-        if let Err(why) = channel_id.say(&ctx.http, &resp).await {
-            println!("Error sending messsage: {why:?}");
-        }
-        
-    }
-    for cap in RE_USING_BP.captures_iter(&data){
-        // let ubp = cap.get_match().as_str();
-        let player = cap.name("player").unwrap().as_str();
-        let item = cap.name("item").unwrap().as_str();
+    // static RE_TRANSFER: LazyLock<Regex> = LazyLock::new(|| Regex::new(RE_PATTERNS[0]).unwrap());
 
-        let resp = MessageBuilder::new()
-            .push_bold_safe(player)
-            .push(" using ")
-            .push_italic_safe(item)
-            .push(" Blueprint")
-            .build();
+
+    // static RE_TRANSFER_TO: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+    //     r"\+(?<player>[[:word:] '-_]*) transferred (?<quant>[0-9]?) (?<item>[[:word:] '-]*) to base"
+    // ).unwrap());
+    // static RE_TRANSFER_OUT: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+    //     r"\+(?<player>[[:word:] '-_]*) transferred (?<quant>[0-9]?) (?<item>[[:word:] '-]*) out of base"
+    // ).unwrap());
+    // static RE_USING_BP: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+    //     r"\+(?<player>[[:word:] '-_]*) using (?<item>[[:word:] '-]*) Blueprint"
+    // ).unwrap());
+    // static RE_CONSTRUCTING: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+    //     r"\+(?<player>[[:word:] '-_]*) constructing (?<item>[[:word:] '-]*)\x00"
+    // ).unwrap());
+    // static RE_CONSTRUCTION_DONE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+    //     r"\+Construction finished on (?<quant>[0-9]?) (?<item>[[:word:] '-]*)\x00"
+    // ).unwrap());
+    // static RE_CREDITS_ADD: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+    //     r"\+(?<player>[[:word:] '-_]*) transferred (?<quant>[[0-9],]?) credits to base"
+    // ).unwrap());
+    // static RE_CREDITS_TAKE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
+    //     r"\+(?<player>[[:word:] '-_]*) took (?<quant>[[0-9],]?) credits from base"
+    // ).unwrap());
+
+    // for cap in RE_TRANSFER_TO.captures_iter(&data){
+    //     // let tt = cap.get_match().as_str();
+    //     let player = cap.name("player").unwrap().as_str();
+    //     let quant = cap.name("quant").unwrap().as_str();
+    //     let item = cap.name("item").unwrap().as_str();
+
+    //     let resp = MessageBuilder::new()
+    //         .push_bold_safe(player)
+    //         .push(" transferred ")
+    //         .push_italic_safe(quant)
+    //         .push(" ")
+    //         .push_italic_safe(item)
+    //         .push(" to base")
+    //         .build();
         
-        if let Err(why) = channel_id.say(&ctx.http, &resp).await {
-            println!("Error sending messsage: {why:?}");
-        }
+    //     if let Err(why) = channel_id.say(&ctx.http, &resp).await {
+    //         println!("Error sending messsage: {why:?}");
+    //     }
         
-    }
+    // }
+    // for cap in RE_TRANSFER_OUT.captures_iter(&data){
+    //     // let to = cap.get_match().as_str();
+    //     let player = cap.name("player").unwrap().as_str();
+    //     let quant = cap.name("quant").unwrap().as_str();
+    //     let item = cap.name("item").unwrap().as_str();
+
+    //     let resp = MessageBuilder::new()
+    //         .push_bold_safe(player)
+    //         .push(" transferred ")
+    //         .push_italic_safe(quant)
+    //         .push(" ")
+    //         .push_italic_safe(item)
+    //         .push(" out of base")
+    //         .build();
+        
+    //     if let Err(why) = channel_id.say(&ctx.http, &resp).await {
+    //         println!("Error sending messsage: {why:?}");
+    //     }
+        
+    // }
+    // for cap in RE_USING_BP.captures_iter(&data){
+    //     // let ubp = cap.get_match().as_str();
+    //     let player = cap.name("player").unwrap().as_str();
+    //     let item = cap.name("item").unwrap().as_str();
+
+    //     let resp = MessageBuilder::new()
+    //         .push_bold_safe(player)
+    //         .push(" using ")
+    //         .push_italic_safe(item)
+    //         .push(" Blueprint")
+    //         .build();
+        
+    //     if let Err(why) = channel_id.say(&ctx.http, &resp).await {
+    //         println!("Error sending messsage: {why:?}");
+    //     }
+        
+    // }
 }
 
  
