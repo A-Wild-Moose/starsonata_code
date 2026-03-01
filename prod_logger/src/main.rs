@@ -1,13 +1,16 @@
-use std::sync::{LazyLock, Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{LazyLock, Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::time::Duration;
 use std::io::{Write, BufWriter, BufReader, Read};
 use std::fs::File;
 use regex::{Regex, RegexSet};
 
 use tokio::signal;
+use tokio::time::sleep;
 
 use serenity::async_trait;
 use serenity::model::{channel::Message, id::{GuildId, ChannelId}};
 use serenity::model::gateway::Ready;
+use serenity::http::Http;
 use serenity::prelude::*;
 use serenity::utils::MessageBuilder;
 
@@ -65,10 +68,56 @@ impl Sire {
             transfer_credits: Regex::new(pats[4]).unwrap()
         }
     }
+
+    async fn get_match_capture(&self, a: &str, mb: Arc<Mutex<MessageBuilder>>) {
+        for cap in self.transfer.captures_iter(a) {
+            let mut mb = mb.lock().unwrap();
+            mb.push_mono_line_safe(format!(
+                "{} transferred {} {} {} base",
+                cap.name("player").unwrap().as_str(),
+                cap.name("quant").unwrap().as_str(),
+                cap.name("item").unwrap().as_str(),
+                cap.name("dir").unwrap().as_str()
+            ));
+        }
+        for cap in self.use_bp.captures_iter(a) {
+            let mut mb = mb.lock().unwrap();
+            mb.push_mono_line_safe(format!(
+                "{} using {} Blueprint",
+                cap.name("player").unwrap().as_str(),
+                cap.name("item").unwrap().as_str(),
+            ));
+        }
+        for cap in self.construct.captures_iter(a) {
+            let mut mb = mb.lock().unwrap();
+            mb.push_mono_line_safe(format!(
+                "{} constructing {}",
+                cap.name("player").unwrap().as_str(),
+                cap.name("item").unwrap().as_str()
+            ));
+        }
+        for cap in self.construct_done.captures_iter(a) {
+            let mut mb = mb.lock().unwrap();
+            mb.push_mono_line_safe(format!(
+                "Construction finished on {} {}",
+                cap.name("quant").unwrap().as_str(),
+                cap.name("item").unwrap().as_str(),
+            ));
+        }
+        for cap in self.transfer_credits.captures_iter(a) {
+            let mut mb = mb.lock().unwrap();
+            mb.push_mono_line_safe(format!(
+                "{} transferred {} credits {} base",
+                cap.name("player").unwrap().as_str(),
+                cap.name("quant").unwrap().as_str(),
+                cap.name("dir").unwrap().as_str()
+            ));
+        }
+    }
 }
 
 
-async fn listen_for_prod(ctx: Context, channel_id: ChannelId) {
+async fn listen_for_prod(mb: Arc<Mutex<MessageBuilder>>) {
     let file = File::open("raw/raw_transfer_equip.txt").unwrap();
     let mut rdr = BufReader::new(file);
 
@@ -79,98 +128,21 @@ async fn listen_for_prod(ctx: Context, channel_id: ChannelId) {
 
     static SIRE: LazyLock<Sire> = LazyLock::new(|| Sire::new());
 
-    // static RE_PATTERNS: LazyLock<Vec<&str>> = LazyLock::new(|| vec![
-    //     r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[0-9]+) (?<item>[[:word:] '\-]*) (?<dir>(to|out of)) base",
-    //     r"\+(?<player>[[:word:] '\-_]*) using (?<item>[[:word:] '\-]*) Blueprint",
-    //     r"\+(?<player>[[:word:] '\-_]*) constructing (?<item>[[:word:] '\-]*)\x00",
-    //     r"\+Construction finished on (?<quant>[0-9]?) (?<item>[[:word:] '\-]*)\x00",
-    //     r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[[0-9],]?) credits (?<dir>(to|from)) base"
-    // ]);
+    if SIRE.set.is_match(&data) {
+        SIRE.get_match_capture(&data, mb).await;
+    }
+}
 
-    // static RE_SET: LazyLock<RegexSet> = LazyLock::new(|| RegexSet::new(RE_PATTERNS).unwrap());
-
-    // static RE_TRANSFER: LazyLock<Regex> = LazyLock::new(|| Regex::new(RE_PATTERNS[0]).unwrap());
-
-
-    // static RE_TRANSFER_TO: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-    //     r"\+(?<player>[[:word:] '-_]*) transferred (?<quant>[0-9]?) (?<item>[[:word:] '-]*) to base"
-    // ).unwrap());
-    // static RE_TRANSFER_OUT: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-    //     r"\+(?<player>[[:word:] '-_]*) transferred (?<quant>[0-9]?) (?<item>[[:word:] '-]*) out of base"
-    // ).unwrap());
-    // static RE_USING_BP: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-    //     r"\+(?<player>[[:word:] '-_]*) using (?<item>[[:word:] '-]*) Blueprint"
-    // ).unwrap());
-    // static RE_CONSTRUCTING: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-    //     r"\+(?<player>[[:word:] '-_]*) constructing (?<item>[[:word:] '-]*)\x00"
-    // ).unwrap());
-    // static RE_CONSTRUCTION_DONE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-    //     r"\+Construction finished on (?<quant>[0-9]?) (?<item>[[:word:] '-]*)\x00"
-    // ).unwrap());
-    // static RE_CREDITS_ADD: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-    //     r"\+(?<player>[[:word:] '-_]*) transferred (?<quant>[[0-9],]?) credits to base"
-    // ).unwrap());
-    // static RE_CREDITS_TAKE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-    //     r"\+(?<player>[[:word:] '-_]*) took (?<quant>[[0-9],]?) credits from base"
-    // ).unwrap());
-
-    // for cap in RE_TRANSFER_TO.captures_iter(&data){
-    //     // let tt = cap.get_match().as_str();
-    //     let player = cap.name("player").unwrap().as_str();
-    //     let quant = cap.name("quant").unwrap().as_str();
-    //     let item = cap.name("item").unwrap().as_str();
-
-    //     let resp = MessageBuilder::new()
-    //         .push_bold_safe(player)
-    //         .push(" transferred ")
-    //         .push_italic_safe(quant)
-    //         .push(" ")
-    //         .push_italic_safe(item)
-    //         .push(" to base")
-    //         .build();
-        
-    //     if let Err(why) = channel_id.say(&ctx.http, &resp).await {
-    //         println!("Error sending messsage: {why:?}");
-    //     }
-        
-    // }
-    // for cap in RE_TRANSFER_OUT.captures_iter(&data){
-    //     // let to = cap.get_match().as_str();
-    //     let player = cap.name("player").unwrap().as_str();
-    //     let quant = cap.name("quant").unwrap().as_str();
-    //     let item = cap.name("item").unwrap().as_str();
-
-    //     let resp = MessageBuilder::new()
-    //         .push_bold_safe(player)
-    //         .push(" transferred ")
-    //         .push_italic_safe(quant)
-    //         .push(" ")
-    //         .push_italic_safe(item)
-    //         .push(" out of base")
-    //         .build();
-        
-    //     if let Err(why) = channel_id.say(&ctx.http, &resp).await {
-    //         println!("Error sending messsage: {why:?}");
-    //     }
-        
-    // }
-    // for cap in RE_USING_BP.captures_iter(&data){
-    //     // let ubp = cap.get_match().as_str();
-    //     let player = cap.name("player").unwrap().as_str();
-    //     let item = cap.name("item").unwrap().as_str();
-
-    //     let resp = MessageBuilder::new()
-    //         .push_bold_safe(player)
-    //         .push(" using ")
-    //         .push_italic_safe(item)
-    //         .push(" Blueprint")
-    //         .build();
-        
-    //     if let Err(why) = channel_id.say(&ctx.http, &resp).await {
-    //         println!("Error sending messsage: {why:?}");
-    //     }
-        
-    // }
+async fn send_prod_logs(mb: Arc<Mutex<MessageBuilder>>, cache_http: Arc<Http>, channel_id: &ChannelId) {
+    let resp = {
+        let mut mb = mb.lock().unwrap();
+        let r = mb.build();
+        mb.0.clear();
+        r
+    };
+    if let Err(why) = channel_id.say(cache_http, &resp).await {
+        println!("Error sending messsage: {why:?}");
+    }
 }
 
  
@@ -213,7 +185,13 @@ impl EventHandler for Handler {
         let channels_ = guild_id.channels(&ctx.http).await.unwrap();
         let (channel_id, channel) = channels_.iter().find(|&(_, x)| x.name == "prod_log").expect("Specified channel not found");
 
-        listen_for_prod(ctx, *channel_id).await;
+        let mb: Arc<Mutex<MessageBuilder>> = Arc::new(Mutex::new(MessageBuilder::new()));
+
+        listen_for_prod(mb.clone()).await;
+        loop {
+            sleep(Duration::from_millis(3000)).await;
+            send_prod_logs(mb.clone(), ctx.http.clone(), channel_id).await;
+        }
     }
 }
 
