@@ -1,4 +1,5 @@
 use std::sync::{LazyLock, Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::thread;
 use std::time::Duration;
 use std::io::{Write, BufWriter, BufReader, Read};
 use std::fs::File;
@@ -6,11 +7,11 @@ use regex::{Regex, RegexSet};
 
 use tokio::signal;
 use tokio::time::sleep;
+use tokio::sync::{mpsc, mpsc::{Sender, Receiver}};
 
 use serenity::async_trait;
 use serenity::model::{channel::Message, id::{GuildId, ChannelId}};
 use serenity::model::gateway::Ready;
-use serenity::http::Http;
 use serenity::prelude::*;
 use serenity::utils::MessageBuilder;
 
@@ -57,7 +58,7 @@ impl Sire {
             r"\+(?<player>[[:word:] '\-_]*) using (?<item>[[:word:] '\-]*) Blueprint",
             r"\+(?<player>[[:word:] '\-_]*) constructing (?<item>[[:word:] '\-]*)\x00",
             r"\+Construction finished on (?<quant>[0-9]?) (?<item>[[:word:] '\-]*)\x00",
-            r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[[0-9],]?) credits (?<dir>(to|from)) base"
+            r"\+(?<player>[[:word:] '\-_]*) (transferred|took) (?<quant>[[0-9],]+) credits (?<dir>(to|from)) base"
         ];
         Self {
             set: RegexSet::new(pats.clone()).unwrap(),
@@ -69,80 +70,109 @@ impl Sire {
         }
     }
 
-    async fn get_match_capture(&self, a: &str, mb: Arc<Mutex<MessageBuilder>>) {
+    async fn get_match_capture(&self, a: &str, tx: Sender<String>) {
+        println!("get match capture");
         for cap in self.transfer.captures_iter(a) {
-            let mut mb = mb.lock().unwrap();
-            mb.push_mono_line_safe(format!(
+            // let mut mb = mb.lock().unwrap();
+            let line = format!(
                 "{} transferred {} {} {} base",
                 cap.name("player").unwrap().as_str(),
                 cap.name("quant").unwrap().as_str(),
                 cap.name("item").unwrap().as_str(),
                 cap.name("dir").unwrap().as_str()
-            ));
+            );
+            // mb.push_mono_line_safe(line);
+            println!("Sending line: {}", line);
+            if let Err(why) = tx.send(line).await {
+                println!("Unable to transmit captured line: {:?}", why);
+            }
         }
-        for cap in self.use_bp.captures_iter(a) {
-            let mut mb = mb.lock().unwrap();
-            mb.push_mono_line_safe(format!(
-                "{} using {} Blueprint",
-                cap.name("player").unwrap().as_str(),
-                cap.name("item").unwrap().as_str(),
-            ));
-        }
-        for cap in self.construct.captures_iter(a) {
-            let mut mb = mb.lock().unwrap();
-            mb.push_mono_line_safe(format!(
-                "{} constructing {}",
-                cap.name("player").unwrap().as_str(),
-                cap.name("item").unwrap().as_str()
-            ));
-        }
-        for cap in self.construct_done.captures_iter(a) {
-            let mut mb = mb.lock().unwrap();
-            mb.push_mono_line_safe(format!(
-                "Construction finished on {} {}",
-                cap.name("quant").unwrap().as_str(),
-                cap.name("item").unwrap().as_str(),
-            ));
-        }
-        for cap in self.transfer_credits.captures_iter(a) {
-            let mut mb = mb.lock().unwrap();
-            mb.push_mono_line_safe(format!(
-                "{} transferred {} credits {} base",
-                cap.name("player").unwrap().as_str(),
-                cap.name("quant").unwrap().as_str(),
-                cap.name("dir").unwrap().as_str()
-            ));
-        }
+        // for cap in self.use_bp.captures_iter(a) {
+        //     let mut mb = mb.lock().unwrap();
+        //     mb.push_mono_line_safe(format!(
+        //         "{} using {} Blueprint",
+        //         cap.name("player").unwrap().as_str(),
+        //         cap.name("item").unwrap().as_str(),
+        //     ));
+        // }
+        // for cap in self.construct.captures_iter(a) {
+        //     let mut mb = mb.lock().unwrap();
+        //     mb.push_mono_line_safe(format!(
+        //         "{} constructing {}",
+        //         cap.name("player").unwrap().as_str(),
+        //         cap.name("item").unwrap().as_str()
+        //     ));
+        // }
+        // for cap in self.construct_done.captures_iter(a) {
+        //     let mut mb = mb.lock().unwrap();
+        //     mb.push_mono_line_safe(format!(
+        //         "Construction finished on {} {}",
+        //         cap.name("quant").unwrap().as_str(),
+        //         cap.name("item").unwrap().as_str(),
+        //     ));
+        // }
+        // for cap in self.transfer_credits.captures_iter(a) {
+        //     let mut mb = mb.lock().unwrap();
+        //     mb.push_mono_line_safe(format!(
+        //         "{} transferred {} credits {} base",
+        //         cap.name("player").unwrap().as_str(),
+        //         cap.name("quant").unwrap().as_str(),
+        //         cap.name("dir").unwrap().as_str()
+        //     ));
+        // }
     }
 }
 
 
-async fn listen_for_prod(mb: Arc<Mutex<MessageBuilder>>) {
-    let file = File::open("raw/raw_transfer_equip.txt").unwrap();
-    let mut rdr = BufReader::new(file);
-
-    let mut buf: Vec<u8> = vec![];
-
-    let _ = rdr.read_to_end(&mut buf).unwrap();
-    let data = String::from_utf8_lossy(&buf);
+async fn listen_for_prod(tx: Sender<String>) {
+    let mut cap = get_pcap_capture();
 
     static SIRE: LazyLock<Sire> = LazyLock::new(|| Sire::new());
 
-    if SIRE.set.is_match(&data) {
-        SIRE.get_match_capture(&data, mb).await;
+    loop {
+        let packet = cap.next_packet().unwrap();
+        let data = String::from_utf8_lossy(packet.data);
+
+        if SIRE.set.is_match(&data) {
+            SIRE.get_match_capture(&data, tx.clone()).await;
+        }
     }
 }
 
-async fn send_prod_logs(mb: Arc<Mutex<MessageBuilder>>, cache_http: Arc<Http>, channel_id: &ChannelId) {
-    let resp = {
-        let mut mb = mb.lock().unwrap();
-        let r = mb.build();
+async fn send_prod_logs(mut rx: Receiver<String>, ctx: Context, channel_id: ChannelId) {
+    println!("inside send prod logs");
+    let mut mb = MessageBuilder::new();
+    let mut i = 0;
+    loop {
+        println!("loop");
+        while i < 10 {
+            println!("while loop {}", i);
+            i = i + 1;
+            if let Some(line) = rx.recv().await {
+                println!("GOT = {}", line);
+                mb.push_mono_line_safe(line);
+            }
+        }
+        let resp = mb.build();
+        if let Err(why) = channel_id.say(ctx.http.clone(), &resp).await {
+            println!("Error sending messsage: {why:?}");
+        }
         mb.0.clear();
-        r
-    };
-    if let Err(why) = channel_id.say(cache_http, &resp).await {
-        println!("Error sending messsage: {why:?}");
+        i = 0;
     }
+    
+    // let resp = {
+    //     let mut mb = mb.lock().unwrap();
+    //     let r = mb.build();
+    //     mb.0.clear();
+    //     r
+    // };
+    // if resp.is_empty() {
+    //     return
+    // }
+    // if let Err(why) = channel_id.say(cache_http, &resp).await {
+    //     println!("Error sending messsage: {why:?}");
+    // }
 }
 
  
@@ -183,15 +213,24 @@ impl EventHandler for Handler {
         let guild_id = guild_id_.expect("Specified guild not found.");
 
         let channels_ = guild_id.channels(&ctx.http).await.unwrap();
-        let (channel_id, channel) = channels_.iter().find(|&(_, x)| x.name == "prod_log").expect("Specified channel not found");
+        let (channel_id_, _) = channels_.iter().find(|&(_, x)| x.name == "prod_log").expect("Specified channel not found");
+        let channel_id = *channel_id_;
 
-        let mb: Arc<Mutex<MessageBuilder>> = Arc::new(Mutex::new(MessageBuilder::new()));
+        // let mb: Arc<Mutex<MessageBuilder>> = Arc::new(Mutex::new(MessageBuilder::new()));
+        let (tx, rx) = mpsc::channel(16);
 
-        listen_for_prod(mb.clone()).await;
-        loop {
-            sleep(Duration::from_millis(3000)).await;
-            send_prod_logs(mb.clone(), ctx.http.clone(), channel_id).await;
-        }
+        // let mb1 = mb.clone();
+        tokio::spawn(async move {
+            listen_for_prod(tx).await;
+        });
+        tokio::spawn(async move {
+            send_prod_logs(rx, ctx, channel_id).await;
+        });
+        // loop {
+        //     sleep(Duration::from_millis(3000)).await;
+        //     println!("3s elapsed");
+        //     send_prod_logs(rx, ctx.http.clone(), channel_id).await;
+        // }
     }
 }
 
