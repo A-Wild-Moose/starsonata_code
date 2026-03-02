@@ -6,7 +6,7 @@ use std::fs::File;
 use regex::{Regex, RegexSet};
 
 use tokio::signal;
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tokio::sync::{mpsc, mpsc::{Sender, Receiver}};
 
 use serenity::async_trait;
@@ -53,11 +53,17 @@ struct Sire { // Station Interaction REgex
 
 impl Sire {
     fn new() -> Self {
+        // +Shadow Wolf transferred 1 Fallen Secondary Desolation Beam* out of base
+        // +Shadow Wolf transferred 1 Empyreal Incinerator* out of base
+        // +Shadow Wolf transferred 1 Incineration Rocket* out of base
+
+        // +Shadow Wolf transferred 50,000,000 credits to base
+        // +Shadow Wolf took 50,000,000 credits from base
         let pats = vec![
-            r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[0-9]+) (?<item>[[:word:] '\-]*) (?<dir>(to|out of)) base",
+            r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[0-9]+) (?<item>[[:word:] '\-\*]*) (?<dir>(to|out of)) base",
             r"\+(?<player>[[:word:] '\-_]*) using (?<item>[[:word:] '\-]*) Blueprint",
-            r"\+(?<player>[[:word:] '\-_]*) constructing (?<item>[[:word:] '\-]*)\x00",
-            r"\+Construction finished on (?<quant>[0-9]?) (?<item>[[:word:] '\-]*)\x00",
+            r"\+(?<player>[[:word:] '\-_]*) constructing (?<item>[[:word:] '\-]*)",
+            r"Construction finished on (?<quant>[0-9]?) (?<item>[[:word:] '\-]*)",
             r"\+(?<player>[[:word:] '\-_]*) (transferred|took) (?<quant>[[0-9],]+) credits (?<dir>(to|from)) base"
         ];
         Self {
@@ -70,109 +76,114 @@ impl Sire {
         }
     }
 
-    async fn get_match_capture(&self, a: &str, tx: Sender<String>) {
-        println!("get match capture");
+    fn get_match_capture(&self, a: &str, tx: Sender<String>) {
         for cap in self.transfer.captures_iter(a) {
-            // let mut mb = mb.lock().unwrap();
             let line = format!(
-                "{} transferred {} {} {} base",
+                "\u{001b}[0;34m{}\u{001b}[0;0m transferred \u{001b}[0;34m{}\u{001b}[0;0m \u{001b}[0;33m{}\u{001b}[0;0m {} base",
                 cap.name("player").unwrap().as_str(),
                 cap.name("quant").unwrap().as_str(),
                 cap.name("item").unwrap().as_str(),
                 cap.name("dir").unwrap().as_str()
             );
-            // mb.push_mono_line_safe(line);
-            println!("Sending line: {}", line);
-            if let Err(why) = tx.send(line).await {
+            if let Err(why) = tx.blocking_send(line) {
                 println!("Unable to transmit captured line: {:?}", why);
             }
         }
-        // for cap in self.use_bp.captures_iter(a) {
-        //     let mut mb = mb.lock().unwrap();
-        //     mb.push_mono_line_safe(format!(
-        //         "{} using {} Blueprint",
-        //         cap.name("player").unwrap().as_str(),
-        //         cap.name("item").unwrap().as_str(),
-        //     ));
-        // }
-        // for cap in self.construct.captures_iter(a) {
-        //     let mut mb = mb.lock().unwrap();
-        //     mb.push_mono_line_safe(format!(
-        //         "{} constructing {}",
-        //         cap.name("player").unwrap().as_str(),
-        //         cap.name("item").unwrap().as_str()
-        //     ));
-        // }
-        // for cap in self.construct_done.captures_iter(a) {
-        //     let mut mb = mb.lock().unwrap();
-        //     mb.push_mono_line_safe(format!(
-        //         "Construction finished on {} {}",
-        //         cap.name("quant").unwrap().as_str(),
-        //         cap.name("item").unwrap().as_str(),
-        //     ));
-        // }
-        // for cap in self.transfer_credits.captures_iter(a) {
-        //     let mut mb = mb.lock().unwrap();
-        //     mb.push_mono_line_safe(format!(
-        //         "{} transferred {} credits {} base",
-        //         cap.name("player").unwrap().as_str(),
-        //         cap.name("quant").unwrap().as_str(),
-        //         cap.name("dir").unwrap().as_str()
-        //     ));
-        // }
+        for cap in self.use_bp.captures_iter(a) {
+            let line = format!(
+                "\u{001b}[0;34m{}\u{001b}[0;0m using \u{001b}[0;33m{}\u{001b}[0;0m Blueprint",
+                cap.name("player").unwrap().as_str(),
+                cap.name("item").unwrap().as_str(),
+            );
+            if let Err(why) = tx.blocking_send(line) {
+                println!("Unable to transmit captured line: {:?}", why);
+            }
+        }
+        for cap in self.construct.captures_iter(a) {
+            let line = format!(
+                "\u{001b}[0;34m{}\u{001b}[0;0m constructing \u{001b}[0;33m{}\u{001b}[0;0m",
+                cap.name("player").unwrap().as_str(),
+                cap.name("item").unwrap().as_str()
+            );
+            if let Err(why) = tx.blocking_send(line) {
+                println!("Unable to transmit captured line: {:?}", why);
+            }
+        }
+        for cap in self.construct_done.captures_iter(a) {
+            let line = format!(
+                "Construction finished on \u{001b}[0;34m{}\u{001b}[0;0m \u{001b}[0;33m{}\u{001b}[0;0m",
+                cap.name("quant").unwrap().as_str(),
+                cap.name("item").unwrap().as_str(),
+            );
+            if let Err(why) = tx.blocking_send(line) {
+                println!("Unable to transmit captured line: {:?}", why);
+            }
+        }
+        for cap in self.transfer_credits.captures_iter(a) {
+            let line = format!(
+                "\u{001b}[0;34m{}\u{001b}[0;0m transferred \u{001b}[0;34m{}\u{001b}[0;0m credits {} base",
+                cap.name("player").unwrap().as_str(),
+                cap.name("quant").unwrap().as_str(),
+                cap.name("dir").unwrap().as_str()
+            );
+            if let Err(why) = tx.blocking_send(line) {
+                println!("Unable to transmit captured line: {:?}", why);
+            }
+        }
     }
 }
 
 
-async fn listen_for_prod(tx: Sender<String>) {
+fn listen_for_prod(tx: Sender<String>) {
     let mut cap = get_pcap_capture();
 
     static SIRE: LazyLock<Sire> = LazyLock::new(|| Sire::new());
 
-    loop {
-        let packet = cap.next_packet().unwrap();
-        let data = String::from_utf8_lossy(packet.data);
+    let file = File::create("raw/raw.txt").unwrap();
+    let mut wrt = BufWriter::new(&file);
 
-        if SIRE.set.is_match(&data) {
-            SIRE.get_match_capture(&data, tx.clone()).await;
-        }
+    loop {
+        match cap.next_packet() {
+            Ok(packet) => {
+                let data = String::from_utf8_lossy(packet.data);
+                wrt.write(&packet.data).unwrap();
+
+                if SIRE.set.is_match(&data) {
+                    SIRE.get_match_capture(&data, tx.clone());
+                }
+            },
+            Err(_) => continue,
+        };
     }
 }
 
 async fn send_prod_logs(mut rx: Receiver<String>, ctx: Context, channel_id: ChannelId) {
-    println!("inside send prod logs");
     let mut mb = MessageBuilder::new();
     let mut i = 0;
     loop {
-        println!("loop");
-        while i < 10 {
-            println!("while loop {}", i);
-            i = i + 1;
-            if let Some(line) = rx.recv().await {
-                println!("GOT = {}", line);
-                mb.push_mono_line_safe(line);
+        // while i < 10 {
+        //     i = i + 1;
+        //     if let Some(line) = rx.recv().await {
+        //         mb.push_mono_line_safe(line);
+        //     }
+        // }
+        let _ = timeout(Duration::from_millis(10000), (async || {
+            while i < 10 {
+                i = i + 1;
+                if let Some(line) = rx.recv().await {
+                    mb.push_codeblock_safe(line, Some("ansi"));
+                }
             }
-        }
+        })()).await;
         let resp = mb.build();
-        if let Err(why) = channel_id.say(ctx.http.clone(), &resp).await {
-            println!("Error sending messsage: {why:?}");
+        if !resp.is_empty() {
+            if let Err(why) = channel_id.say(ctx.http.clone(), &resp).await {
+                println!("Error sending messsage: {why:?}");
+            }
         }
         mb.0.clear();
         i = 0;
     }
-    
-    // let resp = {
-    //     let mut mb = mb.lock().unwrap();
-    //     let r = mb.build();
-    //     mb.0.clear();
-    //     r
-    // };
-    // if resp.is_empty() {
-    //     return
-    // }
-    // if let Err(why) = channel_id.say(cache_http, &resp).await {
-    //     println!("Error sending messsage: {why:?}");
-    // }
 }
 
  
@@ -188,7 +199,7 @@ impl EventHandler for Handler {
             // Sending a message can fail, due to a network error, an authentication error, or lack
             // of permissions to post in the channel, so log to stdout when some error happens,
             // with a description of it.
-            if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
+            if let Err(why) = msg.channel_id.say(&ctx.http, "!Ping").await {
                 println!("Error sending message: {why:?}");
             }
         }
@@ -202,35 +213,31 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
 
-        let mut guild_id_: Option<GuildId> = None;
-        for gid in ready.guilds {
-            let guild_name = gid.id.get_preview(&ctx.http).await.unwrap().name;
-            println!("{:?}", guild_name);
-            if guild_name == "Moose's server"{
-                guild_id_ = Some(gid.id);
-            }
-        }
-        let guild_id = guild_id_.expect("Specified guild not found.");
+        // let mut guild_id_: Option<GuildId> = None;
+        // for gid in ready.guilds {
+        //     let guild_name = gid.id.get_preview(&ctx.http).await.unwrap().name;
+        //     println!("{:?}", guild_name);
+        //     if guild_name == "Moose's server"{
+        //         guild_id_ = Some(gid.id);
+        //     }
+        // }
+        // let guild_id = guild_id_.expect("Specified guild not found.");
 
-        let channels_ = guild_id.channels(&ctx.http).await.unwrap();
-        let (channel_id_, _) = channels_.iter().find(|&(_, x)| x.name == "prod_log").expect("Specified channel not found");
-        let channel_id = *channel_id_;
+        // let channels_ = guild_id.channels(&ctx.http).await.unwrap();
+        // let (channel_id_, _) = channels_.iter().find(|&(_, x)| x.name == "prod_log").expect("Specified channel not found");
+        // let channel_id = *channel_id_;  // have to do this so that it can be moved into the tokio spawned thread
 
-        // let mb: Arc<Mutex<MessageBuilder>> = Arc::new(Mutex::new(MessageBuilder::new()));
-        let (tx, rx) = mpsc::channel(16);
+        // Moose's server :: prod_log
+        let channel_id = ChannelId::new(1476998955337519297);
 
-        // let mb1 = mb.clone();
-        tokio::spawn(async move {
-            listen_for_prod(tx).await;
+        let (tx, rx) = mpsc::channel(128);
+
+        let prod_watch_handle = thread::spawn(|| {
+            listen_for_prod(tx);
         });
         tokio::spawn(async move {
             send_prod_logs(rx, ctx, channel_id).await;
         });
-        // loop {
-        //     sleep(Duration::from_millis(3000)).await;
-        //     println!("3s elapsed");
-        //     send_prod_logs(rx, ctx.http.clone(), channel_id).await;
-        // }
     }
 }
 
