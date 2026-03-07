@@ -48,7 +48,8 @@ struct Sire { // Station Interaction REgex
     use_bp: Regex,
     construct: Regex,
     construct_done: Regex,
-    transfer_credits: Regex
+    transfer_credits: Regex,
+    equip: Regex
 }
 
 impl Sire {
@@ -63,8 +64,9 @@ impl Sire {
             r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[0-9]+) (?<item>[[:word:] '\-\*]*) (?<dir>(to|out of)) base",
             r"\+(?<player>[[:word:] '\-_]*) using (?<item>[[:word:] '\-]*) Blueprint",
             r"\+(?<player>[[:word:] '\-_]*) constructing (?<item>[[:word:] '\-]*)",
-            r"Construction finished on (?<quant>[0-9]?) (?<item>[[:word:] '\-]*)",
-            r"\+(?<player>[[:word:] '\-_]*) (transferred|took) (?<quant>[[0-9],]+) credits (?<dir>(to|from)) base"
+            r"Construction finished on (?<quant>[0-9]*) (?<item>[[:word:] '\-]*)",
+            r"\+(?<player>[[:word:] '\-_]*) (transferred|took) (?<quant>[[0-9],]+) credits (?<dir>(to|from)) base",
+            r"(?<player>[[:word:] '\-_]*) (?<dir>(un)?equipped) (?<item>[[:word:] '\-\*]*)x(?<quant>[0-9]+)."
         ];
         Self {
             set: RegexSet::new(pats.clone()).unwrap(),
@@ -72,7 +74,8 @@ impl Sire {
             use_bp: Regex::new(pats[1]).unwrap(),
             construct: Regex::new(pats[2]).unwrap(),
             construct_done: Regex::new(pats[3]).unwrap(),
-            transfer_credits: Regex::new(pats[4]).unwrap()
+            transfer_credits: Regex::new(pats[4]).unwrap(),
+            equip: Regex::new(pats[5]).unwrap()
         }
     }
 
@@ -130,6 +133,18 @@ impl Sire {
                 println!("Unable to transmit captured line: {:?}", why);
             }
         }
+        for cap in self.equip.captures_iter(a) {
+            let line = format!(
+                "\u{001b}[0;34m{}\u{001b}[0;0m \u{001b}[0;35m{}\u{001b}[0;0m \u{001b}[0;34m{}\u{001b}[0;0m \u{001b}[0;33m{}\u{001b}[0;0m",
+                cap.name("player").unwrap().as_str(),
+                cap.name("dir").unwrap().as_str(),
+                cap.name("quant").unwrap().as_str(),
+                cap.name("item").unwrap().as_str()
+            );
+            if let Err(why) = tx.blocking_send(line) {
+                println!("Unable to transmit captured line: {:?}", why);
+            }
+        }
     }
 }
 
@@ -139,14 +154,14 @@ fn listen_for_prod(tx: Sender<String>) {
 
     static SIRE: LazyLock<Sire> = LazyLock::new(|| Sire::new());
 
-    let file = File::create("raw/raw.txt").unwrap();
-    let mut wrt = BufWriter::new(&file);
+    // let file = File::create("raw/raw.txt").unwrap();
+    // let mut wrt = BufWriter::new(&file);
+    let mut i = 0;
 
     loop {
         match cap.next_packet() {
             Ok(packet) => {
                 let data = String::from_utf8_lossy(packet.data);
-                wrt.write(&packet.data).unwrap();
 
                 if SIRE.set.is_match(&data) {
                     SIRE.get_match_capture(&data, tx.clone());

@@ -27,11 +27,13 @@ pub fn get_pcap_capture() -> Capture<Active> {
     // create the capture and open.
     let mut cap = Capture::from_device(main_device)
         .unwrap()
-        .promisc(true)
+        // .promisc(true)
         .immediate_mode(true)
+        .buffer_size(10000000)  // default: 1,000,000
+        .snaplen(1000000)  // default: 65,535
         .open()
-        .unwrap()
-        .setnonblock()
+        // .unwrap()
+        // .setnonblock()
         .unwrap();
     let _ = cap.filter(
         "src host 51.222.248.34", true
