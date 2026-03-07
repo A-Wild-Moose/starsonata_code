@@ -4,11 +4,19 @@ use std::{thread, time};
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use config::Config;
 use enigo::{Key, Keyboard, Enigo, Settings};
 use enigo::Direction::{Click, Press, Release};
-
 use tracing;
 use tracing_subscriber;
+use secrecy::{SecretBox, ExposeSecret};
+
+
+#[derive(serde::Deserialize, Debug)]
+struct AppConfig {
+    username: String,
+    password: SecretBox<String>,
+}
 
 #[tracing::instrument]
 fn ss_start(mut enigo: Rc<RefCell<Enigo>>) -> Child {
@@ -26,7 +34,7 @@ fn ss_start(mut enigo: Rc<RefCell<Enigo>>) -> Child {
 }
 
 #[tracing::instrument]
-fn ss_login(mut enigo: Rc<RefCell<Enigo>>) {
+fn ss_login(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) {
     let mut enigo = enigo.borrow_mut();
     // Should be on the login screen here with cursor selecting the username field
     // First, select existing username, remove and then retype
@@ -34,12 +42,45 @@ fn ss_login(mut enigo: Rc<RefCell<Enigo>>) {
     let _ = enigo.key(Key::Unicode('a'), Click);
     let _ = enigo.key(Key::Control, Release);
     let _ = enigo.key(Key::Delete, Click);
+
+    // enter the username
+    // for ch in (&settings.username).chars() {
+    //     let _ = enigo.key(Key::Unicode(ch), Click);
+    // }
+    enigo.text(&settings.username).unwrap();
+    // move onto password
+    let _ = enigo.key(Key::Tab, Click);
+    let _ = enigo.key(Key::Control, Press);
+    let _ = enigo.key(Key::Unicode('a'), Click);
+    let _ = enigo.key(Key::Control, Release);
+    let _ = enigo.key(Key::Delete, Click);
+
+    // for ch in (&settings.password).chars() {
+    //     let _ = enigo.key(Key::Unicode(ch), Click);
+    // }
+    enigo.text(settings.password.expose_secret()).unwrap();
+    enigo.key(Key::Return, Click).unwrap();
+
 }
 
 
 fn main() {
+    // load config
+    let settings = Config::builder()
+            .add_source(config::File::with_name("config/config.toml"))
+            .build()
+            .unwrap();
+    let settings: Rc<AppConfig> = Rc::new(settings.try_deserialize().unwrap());
+
+    // logging setup
+    let filter = tracing_subscriber::EnvFilter::builder()
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .from_env()
+        .unwrap()
+        .add_directive("run_ss_test=debug".parse().unwrap());
+
     let subscriber = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
+        .with_env_filter(filter)
         .init();
     
     // let enigo = Arc::new(Mutex::new(Enigo::new(&Settings::default()).unwrap()));
@@ -47,7 +88,7 @@ fn main() {
 
     let mut handle = ss_start(enigo.clone());
 
-    ss_login(enigo.clone());
+    ss_login(enigo.clone(), settings.clone());
 
     // thread::sleep(time::Duration::from_millis(15000));
     // match handle.kill() {
