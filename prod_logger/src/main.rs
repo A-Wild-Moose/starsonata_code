@@ -1,6 +1,6 @@
 use std::sync::{LazyLock, Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::io::{Write, BufWriter, BufReader, Read};
 use std::fs::File;
 use regex::{Regex, RegexSet};
@@ -10,9 +10,9 @@ use tokio::time::{sleep, timeout};
 use tokio::sync::{mpsc, mpsc::{Sender, Receiver}};
 
 use serenity::async_trait;
-use serenity::model::{channel::Message, id::{GuildId, ChannelId}};
-use serenity::model::gateway::Ready;
+use serenity::model::{gateway::Ready, channel::Message, id::{GuildId, ChannelId}, Timestamp};
 use serenity::prelude::*;
+use serenity::builder::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, CreateButton, CreateMessage};
 use serenity::utils::MessageBuilder;
 
 struct Handler;
@@ -61,10 +61,10 @@ impl Sire {
         // +Shadow Wolf transferred 50,000,000 credits to base
         // +Shadow Wolf took 50,000,000 credits from base
         let pats = vec![
-            r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[0-9]+) (?<item>[[:word:] '\-\*]*) (?<dir>(to|out of)) base",
-            r"\+(?<player>[[:word:] '\-_]*) using (?<item>[[:word:] '\-]*) Blueprint",
-            r"\+(?<player>[[:word:] '\-_]*) constructing (?<item>[[:word:] '\-]*)",
-            r"Construction finished on (?<quant>[0-9]*) (?<item>[[:word:] '\-]*)",
+            r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[0-9]+) (?<item>[[:word:] '\.\-\*]*) (?<dir>(to|out of)) base",
+            r"\+(?<player>[[:word:] '\-_]*) using (?<item>[[:word:] '\.\-]*) Blueprint",
+            r"\+(?<player>[[:word:] '\-_]*) constructing (?<item>[[:word:] '\.\-]*)",
+            r"Construction finished on (?<quant>[0-9]*) (?<item>[[:word:] '\.\-]*)",
             r"\+(?<player>[[:word:] '\-_]*) (transferred|took) (?<quant>[[0-9],]+) credits (?<dir>(to|from)) base",
             r"(?<player>[[:word:] '\-_]*) (?<dir>(un)?equipped) (?<item>[[:word:] '\-\*]*)x(?<quant>[0-9]+)."
         ];
@@ -154,14 +154,19 @@ fn listen_for_prod(tx: Sender<String>) {
 
     static SIRE: LazyLock<Sire> = LazyLock::new(|| Sire::new());
 
-    // let file = File::create("raw/raw.txt").unwrap();
-    // let mut wrt = BufWriter::new(&file);
+    let file = File::create("raw/raw.txt").unwrap();
+    let mut wrt = BufWriter::new(&file);
     let mut i = 0;
+
+    let now = SystemTime::now();
 
     loop {
         match cap.next_packet() {
             Ok(packet) => {
                 let data = String::from_utf8_lossy(packet.data);
+                wrt.write(format!("{} - {}\n", i, now.elapsed().unwrap().as_secs_f64()).as_bytes());
+                wrt.write(&packet.data);
+                wrt.write(b"\n");
 
                 if SIRE.set.is_match(&data) {
                     SIRE.get_match_capture(&data, tx.clone());
@@ -169,6 +174,7 @@ fn listen_for_prod(tx: Sender<String>) {
             },
             Err(_) => continue,
         };
+        i += 1;
     }
 }
 
@@ -217,6 +223,23 @@ impl EventHandler for Handler {
             if let Err(why) = msg.channel_id.say(&ctx.http, "!Ping").await {
                 println!("Error sending message: {why:?}");
             }
+        } else if msg.content == "!test" {
+            let footer = CreateEmbedFooter::new("Footer");
+            let embed = CreateEmbed::new()
+                .title("Test embed")
+                .description("embed description")
+                .footer(footer)
+                .field("field 1 name", "field 1 value", true)
+                .timestamp(Timestamp::now());
+            
+            let builder = CreateMessage::new()
+                .content("msg content")
+                .embed(embed);
+            
+            if let Err(why) = msg.channel_id.send_message(&ctx.http, builder).await {
+                println!("Error sending message: {why:?}");
+            }
+
         }
     }
 
@@ -227,20 +250,6 @@ impl EventHandler for Handler {
     // In this case, just print what the current user's username is.
     async fn ready(&self, ctx: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
-
-        // let mut guild_id_: Option<GuildId> = None;
-        // for gid in ready.guilds {
-        //     let guild_name = gid.id.get_preview(&ctx.http).await.unwrap().name;
-        //     println!("{:?}", guild_name);
-        //     if guild_name == "Moose's server"{
-        //         guild_id_ = Some(gid.id);
-        //     }
-        // }
-        // let guild_id = guild_id_.expect("Specified guild not found.");
-
-        // let channels_ = guild_id.channels(&ctx.http).await.unwrap();
-        // let (channel_id_, _) = channels_.iter().find(|&(_, x)| x.name == "prod_log").expect("Specified channel not found");
-        // let channel_id = *channel_id_;  // have to do this so that it can be moved into the tokio spawned thread
 
         // Moose's server :: prod_log
         let channel_id = ChannelId::new(1476998955337519297);
