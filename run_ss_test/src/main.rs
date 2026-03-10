@@ -14,9 +14,11 @@ use secrecy::{SecretBox, ExposeSecret};
 #[derive(serde::Deserialize, Debug)]
 struct StarSonataStartup {
     command: String,
-    initial_sleep: Int,
-    client_load_sleep: Int,
+    initial_sleep: i64,
+    client_load_sleep: i64,
 }
+
+// .wine/drive_c/users/ubuntu/AppData/Roaming/Star\ Sonata\ 2/Star\ Sonata.exe
 
 #[derive(serde::Deserialize, Debug)]
 struct AppConfig {
