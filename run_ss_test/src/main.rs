@@ -14,8 +14,8 @@ use secrecy::{SecretBox, ExposeSecret};
 #[derive(serde::Deserialize, Debug)]
 struct StarSonataStartup {
     command: String,
-    initial_sleep: i64,
-    client_load_sleep: i64,
+    initial_sleep: u64,
+    client_load_sleep: u64,
 }
 
 // .wine/drive_c/users/ubuntu/AppData/Roaming/Star\ Sonata\ 2/Star\ Sonata.exe
@@ -29,7 +29,7 @@ struct AppConfig {
 
 #[tracing::instrument]
 fn ss_start(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
-    let mut handle = Command::new(settings.starsonatastartup.command).spawn().expect("Unable to start exe");
+    let mut handle = Command::new(&settings.starsonatastartup.command).spawn().expect("Unable to start exe");
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.initial_sleep));
 
     tracing::info!("waited 3s starting SS client from options menu screen.");
