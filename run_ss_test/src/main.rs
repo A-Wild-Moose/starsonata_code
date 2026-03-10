@@ -31,7 +31,7 @@ struct AppConfig {
 fn ss_start(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
     // let mut handle = Command::new(&settings.starsonatastartup.ss_path).spawn().expect("Unable to start exe");
     let mut handle = Command::new("wine")
-        .args(&settings.starsonatastartup.ss_path)
+        .arg(&settings.starsonatastartup.ss_path)
         .spawn()
         .expect("Unable to start exe");
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.initial_sleep));
