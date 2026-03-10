@@ -11,24 +11,30 @@ use tracing;
 use tracing_subscriber;
 use secrecy::{SecretBox, ExposeSecret};
 
+#[derive(serde::Deserialize, Debug)]
+struct StarSonataStartup {
+    initial_sleep: Int64,
+    client_load_sleep: In64,
+}
 
 #[derive(serde::Deserialize, Debug)]
 struct AppConfig {
     username: String,
     password: SecretBox<String>,
+    starsonatastartup: StarSonataStartup,
 }
 
 #[tracing::instrument]
-fn ss_start(mut enigo: Rc<RefCell<Enigo>>) -> Child {
+fn ss_start(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
     let mut handle = Command::new(r"C:\Users\lukas\AppData\Roaming\Star Sonata 2 (Beta Client)\Star Sonata.exe").spawn().expect("Unable to start exe");
-    thread::sleep(time::Duration::from_millis(3000));
+    thread::sleep(time::Duration::from_millis(settings.starsonatastartup.initial_sleep));
 
     tracing::info!("waited 3s starting SS client from options menu screen.");
     let mut enigo = enigo.borrow_mut();
     let _ = enigo.key(Key::Return, Click);
 
     // wait for the client to load
-    thread::sleep(time::Duration::from_millis(10000));
+    thread::sleep(time::Duration::from_millis(settings.starsonatastartup.client_load_sleep));
 
     return handle;
 }
@@ -86,7 +92,7 @@ fn main() {
     // let enigo = Arc::new(Mutex::new(Enigo::new(&Settings::default()).unwrap()));
     let enigo = Rc::new(RefCell::new(Enigo::new(&Settings::default()).unwrap()));
 
-    let mut handle = ss_start(enigo.clone());
+    let mut handle = ss_start(enigo.clone(), settings.clone());
 
     ss_login(enigo.clone(), settings.clone());
 
