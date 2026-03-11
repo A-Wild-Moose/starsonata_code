@@ -38,13 +38,13 @@ fn ss_start(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
         .expect("Unable to start exe");
     // thread::sleep(time::Duration::from_millis(settings.starsonatastartup.initial_sleep));
 
-    // tracing::info!(format!("waited {}s starting SS client from options menu screen.", &settings.starsonatastartup.initial_sleep));
+    // tracing::info!("waited {}s starting SS client from options menu screen.", &settings.starsonatastartup.initial_sleep);
     // let mut enigo = enigo.borrow_mut();
     // let _ = enigo.key(Key::Return, Click);
 
     // wait for the client to load
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.client_load_sleep));
-    tracing::info!(format!("Waited {}s for the client to load, moving to login.", &settings.starsonatastartup.client_load_sleep));
+    tracing::info!("Waited {}s for the client to load, moving to login.", &settings.starsonatastartup.client_load_sleep);
 
     return handle;
 }
