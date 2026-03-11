@@ -33,17 +33,18 @@ fn ss_start(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
     // let mut handle = Command::new(&settings.starsonatastartup.ss_path).spawn().expect("Unable to start exe");
     let mut handle = Command::new("wine")
         .arg(&settings.starsonatastartup.ss_path)
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
         .spawn()
         .expect("Unable to start exe");
     // thread::sleep(time::Duration::from_millis(settings.starsonatastartup.initial_sleep));
 
-    // tracing::info!("waited 3s starting SS client from options menu screen.");
+    // tracing::info!(format!("waited {}s starting SS client from options menu screen.", &settings.starsonatastartup.initial_sleep));
     // let mut enigo = enigo.borrow_mut();
     // let _ = enigo.key(Key::Return, Click);
 
     // wait for the client to load
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.client_load_sleep));
+    tracing::info!(format!("Waited {}s for the client to load, moving to login.", &settings.starsonatastartup.client_load_sleep));
 
     return handle;
 }
@@ -53,30 +54,27 @@ fn ss_login(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) {
     let mut enigo = enigo.borrow_mut();
     // Should be on the login screen here with cursor selecting the username field
     // First, select existing username, remove and then retype
+    tracing::info!("Setting username");
     let _ = enigo.key(Key::Control, Press);
     let _ = enigo.key(Key::Unicode('a'), Click);
     let _ = enigo.key(Key::Control, Release);
     let _ = enigo.key(Key::Delete, Click);
 
-    // enter the username
-    // for ch in (&settings.username).chars() {
-    //     let _ = enigo.key(Key::Unicode(ch), Click);
-    // }
     enigo.text(&settings.username).unwrap();
+
     // move onto password
+    tracing::info!("Setting password");
     let _ = enigo.key(Key::Tab, Click);
     let _ = enigo.key(Key::Control, Press);
     let _ = enigo.key(Key::Unicode('a'), Click);
     let _ = enigo.key(Key::Control, Release);
     let _ = enigo.key(Key::Delete, Click);
 
-    // for ch in (&settings.password).chars() {
-    //     let _ = enigo.key(Key::Unicode(ch), Click);
-    // }
     enigo.text(settings.password.expose_secret()).unwrap();
     enigo.key(Key::Return, Click).unwrap();
 
     // wait for the characters to load
+    tracing::info!("Waiting for character screen to load");
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.character_load_sleep));
     enigo.text(settings.password.expose_secret()).unwrap();
     enigo.key(Key::Return, Click).unwrap();
