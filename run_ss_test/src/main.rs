@@ -101,7 +101,9 @@ fn main() {
         .init();
     
     // let enigo = Arc::new(Mutex::new(Enigo::new(&Settings::default()).unwrap()));
-    let enigo = Rc::new(RefCell::new(Enigo::new(&Settings::default()).unwrap()));
+    let mut enigo_settings = Settings::default();
+    enigo_settings.x11_display = Some(":0.0".to_string());
+    let enigo = Rc::new(RefCell::new(Enigo::new(&enigo_settings).unwrap()));
 
     let mut handle = ss_start(enigo.clone(), settings.clone());
 
