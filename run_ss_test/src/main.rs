@@ -1,6 +1,6 @@
 use std::process::{Command, Child};
 use std::{thread, time};
-// use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -31,16 +31,24 @@ struct AppConfig {
 #[tracing::instrument]
 fn ss_start(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
     // let mut handle = Command::new(&settings.starsonatastartup.ss_path).spawn().expect("Unable to start exe");
-    let mut handle = Command::new("wine")
-        .arg(&settings.starsonatastartup.ss_path)
-        .env("DISPLAY", ":0.0")
-        .spawn()
-        .expect("Unable to start exe");
-    // thread::sleep(time::Duration::from_millis(settings.starsonatastartup.initial_sleep));
+    let mut handle = if cfg!(linux) {
+        Command::new("wine")
+            .arg(&settings.starsonatastartup.ss_path)
+            .env("DISPLAY", ":0.0")
+            .spawn()
+            .expect("Unable to start exe")
+    } else {
+        let mut h = Command::new(&settings.starsonatastartup.ss_path)
+            .spawn()
+            .expect("Unable to start exe");
+        
+        thread::sleep(time::Duration::from_millis(settings.starsonatastartup.initial_sleep));
 
-    // tracing::info!("waited {}s starting SS client from options menu screen.", &settings.starsonatastartup.initial_sleep);
-    // let mut enigo = enigo.borrow_mut();
-    // let _ = enigo.key(Key::Return, Click);
+        tracing::info!("waited {}s starting SS client from options menu screen.", &settings.starsonatastartup.initial_sleep);
+        let mut enigo = enigo.borrow_mut();
+        let _ = enigo.key(Key::Return, Click);
+        h
+    };
 
     // wait for the client to load
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.client_load_sleep));
@@ -105,10 +113,20 @@ fn main() {
     enigo_settings.x11_display = Some(":0.0".to_string());
     let enigo = Rc::new(RefCell::new(Enigo::new(&enigo_settings).unwrap()));
 
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
+
     let mut handle = ss_start(enigo.clone(), settings.clone());
 
     ss_login(enigo.clone(), settings.clone());
 
+    while running.load(Ordering::SeqCst) {}
+
+    handle.kill().unwrap();
     // thread::sleep(time::Duration::from_millis(15000));
     // match handle.kill() {
     //     Ok(a) => println!("{:?}", a),
