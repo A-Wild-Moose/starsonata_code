@@ -16,6 +16,7 @@ struct StarSonataStartup {
     ss_path: String,
     initial_sleep: u64,
     client_load_sleep: u64,
+    character_load_sleep: u64,
 }
 
 // .wine/drive_c/users/ubuntu/AppData/Roaming/Star\ Sonata\ 2/Star\ Sonata.exe
@@ -75,6 +76,10 @@ fn ss_login(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) {
     enigo.text(settings.password.expose_secret()).unwrap();
     enigo.key(Key::Return, Click).unwrap();
 
+    // wait for the characters to load
+    thread::sleep(time::Duration::from_millis(settings.starsonatastartup.character_load_sleep));
+    enigo.text(settings.password.expose_secret()).unwrap();
+    enigo.key(Key::Return, Click).unwrap();
 }
 
 
