@@ -67,7 +67,7 @@ fn ss_start(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Option<St
         .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to search for Star Sonata window.");
-    let window = String::from_utf8_lossy(&output.stdout).trim_end();
+    let window = String::from_utf8_lossy(&output.stdout).trim_end().to_string();
     tracing::info!("Found window id: {:?} for Star Sonata.", window);
 
     return (handle, Some(window));
@@ -116,14 +116,14 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
         .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to select username");
-    tracing::debug!("Select username output: {:?}", output);
+    tracing::debug!("Select username output: {:?}", out);
 
     let out = Command::new("xdotool")
         .args(["key", "--window", &window, "Delete"])
         .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to delete username");
-    tracing::debug!("Delete username output: {:?}", output);
+    tracing::debug!("Delete username output: {:?}", out);
     
     tracing::info!("Typing username");
     let out = Command::new("xdotool")
@@ -131,7 +131,7 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
         .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to type username");
-    tracing::debug!("Typing username output: {:?}", output);
+    tracing::debug!("Typing username output: {:?}", out);
 
     // move to password
     let out = Command::new("xdotool")
@@ -139,35 +139,35 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
         .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to tab to password");
-    tracing::debug!("Tab to password output: {:?}", output);
+    tracing::debug!("Tab to password output: {:?}", out);
 
     let out = Command::new("xdotool")
         .args(["key", "--window", &window, "ctrl+a"])
         .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to select password");
-    tracing::debug!("Select password output: {:?}", output);
+    tracing::debug!("Select password output: {:?}", out);
 
     let out = Command::new("xdotool")
         .args(["key", "--window", &window, "Delete"])
         .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to delete password");
-    tracing::debug!("Delete password output: {:?}", output);
+    tracing::debug!("Delete password output: {:?}", out);
 
     let out = Command::new("xdotool")
         .args(["type", "--window", &window, settings.password.expose_secret()])
         .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to type password");
-    tracing::debug!("Type password output: {:?}", output);
+    tracing::debug!("Type password output: {:?}", out);
 
     let out = Command::new("xdotool")
         .args(["key", "--window", &window, "Return"])
         .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to enter user credentials");
-    tracing::debug!("Enter credentials output: {:?}", output);
+    tracing::debug!("Enter credentials output: {:?}", out);
 
     // wait for the characters to load
     tracing::info!("Waiting for character screen to load");
@@ -178,7 +178,7 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
         .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to select character");
-    tracing::debug!("Character select output: {:?}", output);
+    tracing::debug!("Character select output: {:?}", out);
 }
 
 
