@@ -142,7 +142,7 @@ fn main() {
 
     while running.load(Ordering::SeqCst) {}
 
-    handle.kill().unwrap();
+    // handle.kill().unwrap();
     // thread::sleep(time::Duration::from_millis(15000));
     // match handle.kill() {
     //     Ok(a) => println!("{:?}", a),
