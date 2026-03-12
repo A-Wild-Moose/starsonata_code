@@ -113,7 +113,7 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
     // try focusing on window first?
     let out = Command::new("xdotool")
         .args(["windowfocus", "--sync", &window])
-        .env("DISPLAY": ":0.0")
+        .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to focus on window");
     tracing::debug!("Focus window output: {:?}", out);
