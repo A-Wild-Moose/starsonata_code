@@ -29,7 +29,7 @@ struct AppConfig {
 }
 
 #[cfg(not(target_os = "linux"))]
-#[tracing::instrument]
+#[tracing::instrument(skip(settings))]
 fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Option<String>) {
     let handle = Command::new(&settings.starsonatastartup.ss_path)
         .spawn()
@@ -49,7 +49,7 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Optio
 }
 
 #[cfg(target_os = "linux")]
-#[tracing::instrument]
+#[tracing::instrument(skip(settings))]
 fn ss_start(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Option<String>) {
     let handle = Command::new("wine")
             .arg(&settings.starsonatastartup.ss_path)
@@ -74,7 +74,7 @@ fn ss_start(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Option<St
 }
 
 #[cfg(not(target_os = "linux"))]
-#[tracing::instrument]
+#[tracing::instrument(skip(settings))]
 fn ss_login(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<String>) {
     let mut enigo = enigo.borrow_mut();
     // Should be on the login screen here with cursor selecting the username field
@@ -106,9 +106,17 @@ fn ss_login(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<S
 }
 
 #[cfg(target_os = "linux")]
-#[tracing::instrument]
+#[tracing::instrument(skip(settings))]
 fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<String>) {
     let window = window.expect("Window id was not set properly");
+
+    // try focusing on window first?
+    let out = Command::new("xdotool")
+        .args(["windowfocus", "--sync", &window])
+        .env("DISPLAY": ":0.0")
+        .output()
+        .expect("Unable to focus on window");
+    tracing::debug!("Focus window output: {:?}", out);
     // Should be on the first login screen here. Cursor should be selecting the username field
     // select the username to re-type
     let out = Command::new("xdotool")
