@@ -55,19 +55,27 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
     tracing::info!("Waited {}s for the client to load, moving to login.", &settings.starsonatastartup.client_load_sleep);
     
     if cfg!(target_os="linux") {
-        // let output = Command::new("xdotool")
-        //     .arg("getwindowfocus")
-        //     .arg("getwindowname")
-        //     .env("DISPLAY", ":0.0")
-        //     .output()
-        //     .unwrap();
-        // println!("Window focus: {:?}", output);
+        // first search for the star sonata window
         let output = Command::new("xdotool")
             .args(["search", ".*Sonata.*"])
             .env("DISPLAY", ":0.0")
             .output()
+            .expect("Unable to search for Star Sonata window.");
+        // then set it as the window focus. The values returned from the search can be recalled using the special
+        // %<N> notation. We get 2 results, want to use the second
+        Command::new("xdotool")
+            .args(["windowfocus", "%2"])
+            .env("DISPLAY", ":0.0")
+            .status()
+            .expect("Unable to set window focus.");
+
+        let output = Command::new("xdotool")
+            .arg("getwindowfocus")
+            .arg("getwindowname")
+            .env("DISPLAY", ":0.0")
+            .output()
             .unwrap();
-            println!("search: {:?}, process id: {}", output, handle.id());
+        tracing::info!("Window focus: {:?}", output);
     }
 
 
