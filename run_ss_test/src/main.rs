@@ -143,7 +143,7 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
 
     // move to password
     let out = Command::new("xdotool")
-        .args(["key", "--window", &window, "tab"])
+        .args(["key", "--window", &window, "0xff09"])
         .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to tab to password");
