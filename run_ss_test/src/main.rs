@@ -63,8 +63,8 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
             .expect("Unable to search for Star Sonata window.");
         println!("search: {:?}", output);
         let sto = String::from_utf8_lossy(&output.stdout);
-        println!("{:?}", sto);
-        // let windows = sto.split("\n").collect::<Vec<&str>>();
+        let windows = sto.split("\n").collect::<Vec<&str>>();
+        println!("{:?}", windows);
         // then set it as the window focus. The values returned from the search can be recalled using the special
         // %<N> notation. We get 2 results, just try to set them all as focus, one should fail, other should work
         // let o1 = Command::new("xdotool")
