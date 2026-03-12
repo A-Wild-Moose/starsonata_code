@@ -53,6 +53,15 @@ fn ss_start(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
     // wait for the client to load
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.client_load_sleep));
     tracing::info!("Waited {}s for the client to load, moving to login.", &settings.starsonatastartup.client_load_sleep);
+    
+    if cfg!(linux) {
+        let output = Command("xdotool")
+            .env("DISPLAY", ":0.0")
+            .args(["getwindowfocus", "getwindowname"])
+            .output();
+        println!("Window focus: {:?}", output);
+    }
+
 
     return handle;
 }
