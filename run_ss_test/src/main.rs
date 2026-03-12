@@ -61,18 +61,21 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
             .env("DISPLAY", ":0.0")
             .output()
             .expect("Unable to search for Star Sonata window.");
+        println!("search: {:?}", output);
         // then set it as the window focus. The values returned from the search can be recalled using the special
         // %<N> notation. We get 2 results, just try to set them all as focus, one should fail, other should work
-        Command::new("xdotool")
+        let o1 = Command::new("xdotool")
             .args(["windowfocus", "%1"])
             .env("DISPLAY", ":0.0")
             .status()
             .expect("Unable to set window focus.");
-        Command::new("xdotool")
+        println!("Set 1: {:?}", o1);
+        let o2 = Command::new("xdotool")
             .args(["windowfocus", "%2"])
             .env("DISPLAY", ":0.0")
             .status()
             .expect("Unable to set window focus.");
+        println!("set 2: {:?}", o2);
 
         let output = Command::new("xdotool")
             .arg("getwindowfocus")
