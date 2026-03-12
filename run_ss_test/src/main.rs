@@ -66,7 +66,7 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
             .args(["search", "--name", "Sonata"])
             .output()
             .unwrap();
-            println!("search: {:?}", output);
+            println!("search: {:?}, process id: {}", output, handle.id());
     }
 
 
