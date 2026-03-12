@@ -29,7 +29,7 @@ struct AppConfig {
 }
 
 #[tracing::instrument]
-fn ss_start(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
+fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
     // let mut handle = Command::new(&settings.starsonatastartup.ss_path).spawn().expect("Unable to start exe");
     let mut handle = if cfg!(linux) {
         Command::new("wine")
@@ -57,7 +57,8 @@ fn ss_start(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
     if cfg!(linux) {
         let output = Command::new("xdotool")
             .env("DISPLAY", ":0.0")
-            .args(["getwindowfocus", "getwindowname"])
+            .arg("getwindowfocus")
+            .arg("getwindowname")
             .output()
             .unwrap();
         println!("Window focus: {:?}", output);
@@ -68,7 +69,7 @@ fn ss_start(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
 }
 
 #[tracing::instrument]
-fn ss_login(mut enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) {
+fn ss_login(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) {
     let mut enigo = enigo.borrow_mut();
     // Should be on the login screen here with cursor selecting the username field
     // First, select existing username, remove and then retype
