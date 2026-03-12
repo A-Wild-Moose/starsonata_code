@@ -56,9 +56,9 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
     
     if cfg!(linux) {
         let output = Command::new("xdotool")
-            .env("DISPLAY", ":0.0")
             .arg("getwindowfocus")
             .arg("getwindowname")
+            .env("DISPLAY", ":0.0")
             .output()
             .unwrap();
         println!("Window focus: {:?}", output);
