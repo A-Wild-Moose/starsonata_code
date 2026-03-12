@@ -63,30 +63,25 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
             .expect("Unable to search for Star Sonata window.");
         println!("search: {:?}", output);
         let sto = String::from_utf8_lossy(&output.stdout);
-        let windows = sto.split("\n").collect::<Vec<&str>>();
-        println!("{:?}", windows);
-        // then set it as the window focus. The values returned from the search can be recalled using the special
-        // %<N> notation. We get 2 results, just try to set them all as focus, one should fail, other should work
-        // let o1 = Command::new("xdotool")
-        //     .args(["windowfocus", "%1"])
-        //     .env("DISPLAY", ":0.0")
-        //     .status()
-        //     .expect("Unable to set window focus.");
-        // println!("Set 1: {:?}", o1);
-        // let o2 = Command::new("xdotool")
-        //     .args(["windowfocus", "%2"])
-        //     .env("DISPLAY", ":0.0")
-        //     .status()
-        //     .expect("Unable to set window focus.");
-        // println!("set 2: {:?}", o2);
+        // then set it as the window focus.
+        for win in sto.split("\n") {
+            if win.len() > 4 {
+                let o = Command::new("xdotool")
+                    .args(["windowfocus", win])
+                    .env("DISPLAY", ":0.0")
+                    .output()
+                    .expect("Unable to set window focus");
+                    println!("set: {:?}", o);
+            }
+        }
 
-        // let output = Command::new("xdotool")
-        //     .arg("getwindowfocus")
-        //     .arg("getwindowname")
-        //     .env("DISPLAY", ":0.0")
-        //     .output()
-        //     .unwrap();
-        // tracing::info!("Window focus: {:?}", output);
+        let output = Command::new("xdotool")
+            .arg("getwindowfocus")
+            .arg("getwindowname")
+            .env("DISPLAY", ":0.0")
+            .output()
+            .unwrap();
+        tracing::info!("Window focus: {:?}", output);
     }
 
 
