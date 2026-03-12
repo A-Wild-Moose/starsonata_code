@@ -140,7 +140,7 @@ fn main() {
 
     ss_login(enigo.clone(), settings.clone());
 
-    while running.load(Ordering::SeqCst) {}
+    // while running.load(Ordering::SeqCst) {}
 
     // handle.kill().unwrap();
     // thread::sleep(time::Duration::from_millis(15000));
