@@ -62,28 +62,31 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
             .output()
             .expect("Unable to search for Star Sonata window.");
         println!("search: {:?}", output);
+        let sto = output.stdout;
+        println!("{:?}", sto);
+        // let windows = sto.split("\n").collect::<Vec<&str>>();
         // then set it as the window focus. The values returned from the search can be recalled using the special
         // %<N> notation. We get 2 results, just try to set them all as focus, one should fail, other should work
-        let o1 = Command::new("xdotool")
-            .args(["windowfocus", "%1"])
-            .env("DISPLAY", ":0.0")
-            .status()
-            .expect("Unable to set window focus.");
-        println!("Set 1: {:?}", o1);
-        let o2 = Command::new("xdotool")
-            .args(["windowfocus", "%2"])
-            .env("DISPLAY", ":0.0")
-            .status()
-            .expect("Unable to set window focus.");
-        println!("set 2: {:?}", o2);
+        // let o1 = Command::new("xdotool")
+        //     .args(["windowfocus", "%1"])
+        //     .env("DISPLAY", ":0.0")
+        //     .status()
+        //     .expect("Unable to set window focus.");
+        // println!("Set 1: {:?}", o1);
+        // let o2 = Command::new("xdotool")
+        //     .args(["windowfocus", "%2"])
+        //     .env("DISPLAY", ":0.0")
+        //     .status()
+        //     .expect("Unable to set window focus.");
+        // println!("set 2: {:?}", o2);
 
-        let output = Command::new("xdotool")
-            .arg("getwindowfocus")
-            .arg("getwindowname")
-            .env("DISPLAY", ":0.0")
-            .output()
-            .unwrap();
-        tracing::info!("Window focus: {:?}", output);
+        // let output = Command::new("xdotool")
+        //     .arg("getwindowfocus")
+        //     .arg("getwindowname")
+        //     .env("DISPLAY", ":0.0")
+        //     .output()
+        //     .unwrap();
+        // tracing::info!("Window focus: {:?}", output);
     }
 
 
