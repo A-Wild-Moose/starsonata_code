@@ -28,68 +28,54 @@ struct AppConfig {
     starsonatastartup: StarSonataStartup,
 }
 
+#[cfg(not(target_os = "linux"))]
 #[tracing::instrument]
-fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
-    // let mut handle = Command::new(&settings.starsonatastartup.ss_path).spawn().expect("Unable to start exe");
-    let handle = if cfg!(target_os="linux") {
-        Command::new("wine")
+fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Option<String>) {
+    let handle = Command::new(&settings.starsonatastartup.ss_path)
+        .spawn()
+        .expect("Unable to start exe");
+        
+    thread::sleep(time::Duration::from_millis(settings.starsonatastartup.initial_sleep));
+
+    tracing::info!("waited {}s starting SS client from options menu screen.", &settings.starsonatastartup.initial_sleep);
+    let mut enigo = enigo.borrow_mut();
+    let _ = enigo.key(Key::Return, Click);
+
+    // wait for the client to load
+    thread::sleep(time::Duration::from_millis(settings.starsonatastartup.client_load_sleep));
+    tracing::info!("Waited {}s for the client to load, moving to login.", &settings.starsonatastartup.client_load_sleep);
+
+    return (handle, None);
+}
+
+#[cfg(target_os = "linux")]
+#[tracing::instrument]
+fn ss_start(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Option<String>) {
+    let handle = Command::new("wine")
             .arg(&settings.starsonatastartup.ss_path)
             .env("DISPLAY", ":0.0")
             .spawn()
-            .expect("Unable to start exe")
-    } else {
-        let h = Command::new(&settings.starsonatastartup.ss_path)
-            .spawn()
             .expect("Unable to start exe");
-        
-        thread::sleep(time::Duration::from_millis(settings.starsonatastartup.initial_sleep));
-
-        tracing::info!("waited {}s starting SS client from options menu screen.", &settings.starsonatastartup.initial_sleep);
-        let mut enigo = enigo.borrow_mut();
-        let _ = enigo.key(Key::Return, Click);
-        h
-    };
 
     // wait for the client to load
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.client_load_sleep));
     tracing::info!("Waited {}s for the client to load, moving to login.", &settings.starsonatastartup.client_load_sleep);
     
-    if cfg!(target_os="linux") {
-        // first search for the star sonata window
-        let output = Command::new("xdotool")
-            .args(["search", "--name", ".*Star Sonata.*"])
-            .env("DISPLAY", ":0.0")
-            .output()
-            .expect("Unable to search for Star Sonata window.");
-        println!("search: {:?}", output);
-        let sto = String::from_utf8_lossy(&output.stdout);
-        // then set it as the window focus.
-        for win in sto.split("\n") {
-            if win.len() > 4 {
-                let o = Command::new("xdotool")
-                    .args(["windowfocus", win])
-                    .env("DISPLAY", ":0.0")
-                    .output()
-                    .expect("Unable to set window focus");
-                    println!("set: {:?}", o);
-            }
-        }
+    // first search for the star sonata window
+    let output = Command::new("xdotool")
+        .args(["search", "--name", ".*Star Sonata.*"])
+        .env("DISPLAY", ":0.0")
+        .output()
+        .expect("Unable to search for Star Sonata window.");
+    let window = String::from_utf8_lossy(&output.stdout).trim_end();
+    tracing::info!("Found window id: {:?} for Star Sonata.", window);
 
-        let output = Command::new("xdotool")
-            .arg("getwindowfocus")
-            .arg("getwindowname")
-            .env("DISPLAY", ":0.0")
-            .output()
-            .unwrap();
-        tracing::info!("Window focus: {:?}", output);
-    }
-
-
-    return handle;
+    return (handle, Some(window));
 }
 
+#[cfg(not(target_os = "linux"))]
 #[tracing::instrument]
-fn ss_login(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) {
+fn ss_login(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<String>) {
     let mut enigo = enigo.borrow_mut();
     // Should be on the login screen here with cursor selecting the username field
     // First, select existing username, remove and then retype
@@ -115,8 +101,84 @@ fn ss_login(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) {
     // wait for the characters to load
     tracing::info!("Waiting for character screen to load");
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.character_load_sleep));
-    enigo.text(settings.password.expose_secret()).unwrap();
+    
     enigo.key(Key::Return, Click).unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[tracing::instrument]
+fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<String>) {
+    let window = window.expect("Window id was not set properly");
+    // Should be on the first login screen here. Cursor should be selecting the username field
+    // select the username to re-type
+    let out = Command::new("xdotool")
+        .args(["key", "--window", &window, "ctrl+a"])
+        .env("DISPLAY", ":0.0")
+        .output()
+        .expect("Unable to select username");
+    tracing::debug!("Select username output: {:?}", output);
+
+    let out = Command::new("xdotool")
+        .args(["key", "--window", &window, "Delete"])
+        .env("DISPLAY", ":0.0")
+        .output()
+        .expect("Unable to delete username");
+    tracing::debug!("Delete username output: {:?}", output);
+    
+    tracing::info!("Typing username");
+    let out = Command::new("xdotool")
+        .args(["type", "--window", &window, &settings.username])
+        .env("DISPLAY", ":0.0")
+        .output()
+        .expect("Unable to type username");
+    tracing::debug!("Typing username output: {:?}", output);
+
+    // move to password
+    let out = Command::new("xdotool")
+        .args(["key", "--window", &window, "tab"])
+        .env("DISPLAY", ":0.0")
+        .output()
+        .expect("Unable to tab to password");
+    tracing::debug!("Tab to password output: {:?}", output);
+
+    let out = Command::new("xdotool")
+        .args(["key", "--window", &window, "ctrl+a"])
+        .env("DISPLAY", ":0.0")
+        .output()
+        .expect("Unable to select password");
+    tracing::debug!("Select password output: {:?}", output);
+
+    let out = Command::new("xdotool")
+        .args(["key", "--window", &window, "Delete"])
+        .env("DISPLAY", ":0.0")
+        .output()
+        .expect("Unable to delete password");
+    tracing::debug!("Delete password output: {:?}", output);
+
+    let out = Command::new("xdotool")
+        .args(["type", "--window", &window, settings.password.expose_secret()])
+        .env("DISPLAY", ":0.0")
+        .output()
+        .expect("Unable to type password");
+    tracing::debug!("Type password output: {:?}", output);
+
+    let out = Command::new("xdotool")
+        .args(["key", "--window", &window, "Return"])
+        .env("DISPLAY", ":0.0")
+        .output()
+        .expect("Unable to enter user credentials");
+    tracing::debug!("Enter credentials output: {:?}", output);
+
+    // wait for the characters to load
+    tracing::info!("Waiting for character screen to load");
+    thread::sleep(time::Duration::from_millis(settings.starsonatastartup.character_load_sleep));
+    
+    let out = Command::new("xdotool")
+        .args(["key", "--window", &window, "Return"])
+        .env("DISPLAY", ":0.0")
+        .output()
+        .expect("Unable to select character");
+    tracing::debug!("Character select output: {:?}", output);
 }
 
 
@@ -151,9 +213,9 @@ fn main() {
         r.store(false, Ordering::SeqCst);
     }).expect("Error setting Ctrl-C handler");
 
-    let mut handle = ss_start(enigo.clone(), settings.clone());
+    let (mut handle, window) = ss_start(enigo.clone(), settings.clone());
 
-    ss_login(enigo.clone(), settings.clone());
+    ss_login(enigo.clone(), settings.clone(), window);
 
     while running.load(Ordering::SeqCst) {}
 
