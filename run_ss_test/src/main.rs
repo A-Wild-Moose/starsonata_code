@@ -64,7 +64,12 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
         // then set it as the window focus. The values returned from the search can be recalled using the special
         // %<N> notation. We get 2 results, just try to set them all as focus, one should fail, other should work
         Command::new("xdotool")
-            .args(["windowfocus", "%@"])
+            .args(["windowfocus", "%1"])
+            .env("DISPLAY", ":0.0")
+            .status()
+            .expect("Unable to set window focus.");
+        Command::new("xdotool")
+            .args(["windowfocus", "%2"])
             .env("DISPLAY", ":0.0")
             .status()
             .expect("Unable to set window focus.");
