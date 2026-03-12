@@ -57,7 +57,7 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
     if cfg!(target_os="linux") {
         // first search for the star sonata window
         let output = Command::new("xdotool")
-            .args(["search", "\".*Star Sonata.*\""])
+            .args(["search", "--name", r"'.*Star Sonata.*'"])
             .env("DISPLAY", ":0.0")
             .output()
             .expect("Unable to search for Star Sonata window.");
