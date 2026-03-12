@@ -31,14 +31,14 @@ struct AppConfig {
 #[tracing::instrument]
 fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
     // let mut handle = Command::new(&settings.starsonatastartup.ss_path).spawn().expect("Unable to start exe");
-    let mut handle = if cfg!(linux) {
+    let handle = if cfg!(target_os="linux") {
         Command::new("wine")
             .arg(&settings.starsonatastartup.ss_path)
             .env("DISPLAY", ":0.0")
             .spawn()
             .expect("Unable to start exe")
     } else {
-        let mut h = Command::new(&settings.starsonatastartup.ss_path)
+        let h = Command::new(&settings.starsonatastartup.ss_path)
             .spawn()
             .expect("Unable to start exe");
         
@@ -54,15 +54,15 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.client_load_sleep));
     tracing::info!("Waited {}s for the client to load, moving to login.", &settings.starsonatastartup.client_load_sleep);
     
-    // if cfg!(linux) {
-    //     let output = Command::new("xdotool")
-    //         .arg("getwindowfocus")
-    //         .arg("getwindowname")
-    //         .env("DISPLAY", ":0.0")
-    //         .output()
-    //         .unwrap();
-    //     println!("Window focus: {:?}", output);
-    // }
+    if cfg!(target_os="linux") {
+        let output = Command::new("xdotool")
+            .arg("getwindowfocus")
+            .arg("getwindowname")
+            .env("DISPLAY", ":0.0")
+            .output()
+            .unwrap();
+        println!("Window focus: {:?}", output);
+    }
 
 
     return handle;
@@ -115,7 +115,7 @@ fn main() {
         .unwrap()
         .add_directive("run_ss_test=debug".parse().unwrap());
 
-    let subscriber = tracing_subscriber::fmt()
+    let _subscriber = tracing_subscriber::fmt()
         .with_env_filter(filter)
         .init();
     
