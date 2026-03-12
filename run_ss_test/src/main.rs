@@ -64,6 +64,7 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
         // println!("Window focus: {:?}", output);
         let output = Command::new("xdotool")
             .args(["search", ".*Sonata.*"])
+            .env("DISPLAY", ":0.0")
             .output()
             .unwrap();
             println!("search: {:?}, process id: {}", output, handle.id());
