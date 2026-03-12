@@ -62,7 +62,7 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> Child {
             .output()
             .expect("Unable to search for Star Sonata window.");
         println!("search: {:?}", output);
-        let sto = output.stdout;
+        let sto = String::from_utf8_lossy(&output.stdout);
         println!("{:?}", sto);
         // let windows = sto.split("\n").collect::<Vec<&str>>();
         // then set it as the window focus. The values returned from the search can be recalled using the special
