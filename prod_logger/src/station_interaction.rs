@@ -1,0 +1,126 @@
+use regex::{Regex, RegexSet};
+use tokio::sync::mpsc::Sender;
+
+// define some macros so that all our colors stay constant
+macro_rules! player {
+    ($player_string:ident) => {
+        format_args!("\u{001b}[0;34m{}\u{001b}[0;0m", $player_string)
+    }
+}
+
+macro_rules! quant {
+    ($quant_string:ident) => {
+        format_args!("\u{001b}[0;36m{}\u{001b}[0;0m", $quant_string)
+    }
+}
+
+macro_rules! item {
+    ($item_string:ident) => {
+        format_args!("\u{001b}[0;33m{}\u{001b}[0;0m", $item_string)
+    }
+}
+
+macro_rules! equip_dir! {
+    ($dir_string:ident) => {
+        format_args!("\u{001b}[0;35m{}\u{001b}[0;0m")
+    }
+}
+
+struct StationMonitor {
+    set: RegexSet,
+    transfer: Regex,
+    use_bp: Regex,
+    construct: Regex,
+    construct_done: Regex,
+    transfer_credits: Regex,
+    equip: Regex,
+}
+
+impl StationMonitor {
+    fn new() -> Self {
+        // +Shadow Wolf transferred 1 Fallen Secondary Desolation Beam* out of base
+        // +Shadow Wolf transferred 1 Empyreal Incinerator* out of base
+        // +Shadow Wolf transferred 1 Incineration Rocket* out of base
+
+        // +Shadow Wolf transferred 50,000,000 credits to base
+        // +Shadow Wolf took 50,000,000 credits from base
+        let patterns = vec![
+            r"\+(?<player>[[:word:] '\-_]*) (transferred|took) (?<quant>[0-9]+) (?<item>[[:word:] '\.\-\*]*) (?<dir>(to|out of|from)) base",
+            r"\+(?<player>[[:word:] '\-_]*) using (?<item>[[:word:] '\.\-]*) Blueprint",
+            r"\+(?<player>[[:word:] '\-_]*) constructing (?<item>[[:word:] '\.\-]*)",
+            r"Construction finished on (?<quant>[0-9]*) (?<item>[[:word:] '\.\-]*)",
+            r"(?<player>[[:word:] '\-_]*) (?<dir>(un)?equipped) (?<item>[[:word:] '\-\*]*)x(?<quant>[0-9]+)."
+        ];
+        Self {
+            set: RegexSet::new(patterns.clone()).unwrap(),
+            transfer: Regex::new(patterns[0]).unwrap(),
+            use_bp: Regex::new(patterns[1]).unwrap(),
+            construct: Regex::new(patterns[2]).unwrap(),
+            construct_done: Regex::new(patterns[3]).unwrap(),
+            equip: Regex::new(patterns[5]).unwrap()
+        }
+    }
+
+    fn get_match_capture(&self, a: &str, tx: Sender<String>) {
+        // also handles credits
+        for cap in self.transfer.captures_iter(a) {
+            let (_, [player, quant, item, dir]) = cap.extract();
+            let line = format!(
+                "{} transferred {} {} {} base",
+                player!(player),
+                quant!(quant),
+                item!(item),
+                dir,
+            );
+            if let Err(why) = tx.blocking_send(line) {
+                println!("Unable to transmit captured line: {:?}", why);
+            }
+        }
+        for cap in self.use_bp.captures_iter(a) {
+            let (_, [player, item]) = cap.extract();
+            let line = format!(
+                "{} using {} Blueprint",
+                player!(player),
+                item!(item),
+            );
+            if let Err(why) = tx.blocking_send(line) {
+                println!("Unable to transmit captured line: {:?}", why);
+            }
+        }
+        for cap in self.construct.captures_iter(a) {
+            let (_, [player, item]) = cap.extract();
+            let line = format!(
+                "{} constructing {}",
+                player!(player),
+                item!(item),
+            );
+            if let Err(why) = tx.blocking_send(line) {
+                println!("Unable to transmit captured line: {:?}", why);
+            }
+        }
+        for cap in self.construct_done.captures_iter(a) {
+            let (_, [quant, item]) = cap.extract();
+            let line = format!(
+                "Construction finished on {} {}",
+                quant!(quant),
+                item!(item),
+            );
+            if let Err(why) = tx.blocking_send(line) {
+                println!("Unable to transmit captured line: {:?}", why);
+            }
+        }
+        for cap in self.equip.captures_iter(a) {
+            let (_, [player, dir, quant, item]) = cap.extract();
+            let line = format!(
+                "{} {} {} {}",
+                player!(player),
+                equip_dir!(dir),
+                quant!(quant),
+                item!(item),
+            );
+            if let Err(why) = tx.blocking_send(line) {
+                println!("Unable to transmit captured line: {:?}", why);
+            }
+        }
+    }
+}
