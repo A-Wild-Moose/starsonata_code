@@ -1,7 +1,9 @@
+use std::sync::LazyLock;
+
 use regex::{Regex, RegexSet};
 use tokio::sync::mpsc::Sender;
 
-use prod_logger::device::get_pcap_capture;
+use super::device::get_pcap_capture;
 
 // define some macros so that all our colors stay constant
 macro_rules! player {
@@ -138,7 +140,7 @@ pub fn listen_for_prod(tx: Sender<String>) {
                 let data = String::from_utf8_lossy(packet.data);
 
                 if STATION_MONITOR.re_set.is_match(&data) {
-                    STATION_MONITOR.get_match_capture(&ddata, tx.clone());
+                    STATION_MONITOR.get_match_capture(&data, tx.clone());
                 }
             },
             Err(_) => continue,

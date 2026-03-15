@@ -1,24 +1,25 @@
 use serde::Deserialize;
+use secrecy::SecretBox;
 
 
-#[derive(Deserialize, Debug)]
-pub struct StarSonata_Account {
-    username: String,
-    password: SecretBox<String>
+#[derive(serde::Deserialize, Debug)]
+pub struct StarSonataAccount {
+    pub username: String,
+    pub password: SecretBox<String>
 }
 
 #[derive(Deserialize, Debug)]
-pub struct StarSonata_Startup {
-    ss_path: String,
-    initial_sleep: u64,
-    client_load_sleep: u64,
-    character_load_sleep: u64,
+pub struct StarSonataStartup {
+    pub ss_path: String,
+    pub initial_sleep: u64,
+    pub client_load_sleep: u64,
+    pub character_load_sleep: u64,
 }
 
 
 #[derive(Deserialize, Debug)]
 pub struct AppConfig {
-    pub starsonata_account: StarSonata_Account,
-    pub starsonata_startup: StarSonata_Startup,
+    pub starsonata_account: StarSonataAccount,
+    pub starsonata_startup: StarSonataStartup,
 }
 

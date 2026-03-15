@@ -1,42 +1,32 @@
-use std::sync::{LazyLock, Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, SystemTime};
-use std::io::{Write, BufWriter, BufReader, Read};
-use std::fs::File;
-use regex::{Regex, RegexSet};
+use std::time::Duration;
 
-use tracing::{debug, info, warn, error, trace};
+use tracing::{info};
 use tracing_subscriber::{EnvFilter, filter::LevelFilter};
 
 use config::Config;
 
 use tokio::signal;
-use tokio::time::{sleep, timeout};
-use tokio::sync::{mpsc, mpsc::{Sender, Receiver}};
+use tokio::time::timeout;
+use tokio::sync::{mpsc, mpsc::Receiver};
 
 use serenity::async_trait;
-use serenity::model::{gateway::Ready, channel::Message, id::{GuildId, ChannelId}, Timestamp};
+use serenity::model::{gateway::Ready, channel::Message, id::ChannelId, Timestamp};
 use serenity::prelude::*;
-use serenity::builder::{CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, CreateButton, CreateMessage};
+use serenity::builder::{CreateEmbed, CreateEmbedFooter, CreateMessage};
 use serenity::utils::MessageBuilder;
 
-struct Handler;
-
-use prod_logger::device::get_pcap_capture;
 use prod_logger::station_interaction::listen_for_prod;
 use prod_logger::config::AppConfig;
 
 
-async fn send_prod_logs(mut rx: Receiver<String>, ctx: Context, channel_id: ChannelId) {
+struct Handler;
+
+async fn send_prod_logs_to_discord(mut rx: Receiver<String>, ctx: Context, channel_id: ChannelId) {
     let mut mb = MessageBuilder::new();
     let mut i = 0;
     loop {
-        // while i < 10 {
-        //     i = i + 1;
-        //     if let Some(line) = rx.recv().await {
-        //         mb.push_mono_line_safe(line);
-        //     }
-        // }
         let _ = timeout(Duration::from_millis(10000), (async || {
             while i < 10 {
                 i = i + 1;
@@ -109,7 +99,7 @@ impl EventHandler for Handler {
             listen_for_prod(tx);
         });
         tokio::spawn(async move {
-            send_prod_logs(rx, ctx, channel_id).await;
+            send_prod_logs_to_discord(rx, ctx, channel_id).await;
         });
     }
 }

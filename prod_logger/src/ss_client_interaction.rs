@@ -2,14 +2,14 @@ use std::sync::Arc;
 use std::process::{Command, Child};
 use std::{thread, time::Duration};
 
-use secrecy::{SecretBox, ExposeSecret};
-use tracing::{instrument, info, debug, trace, warn, error};
-use tokio::sync::oneshot::Receiver;
+use secrecy::ExposeSecret;
+use tracing::{instrument, info, warn};
 
 #[cfg(not(target_os = "linux"))]
-use enigo::{Key, Keyboardd, Enigo, Settings, Direction::{Click, Press, Release}};
+use enigo::{Key, Keyboard, Enigo, Settings, Direction::{Click, Press, Release}};
 
-use prod_logger::config::AppConfig;
+use super::config::AppConfig;
+
 
 #[macro_export]
 macro_rules! xdotool {
@@ -22,7 +22,7 @@ macro_rules! xdotool {
             )*
             c.output().expect($err_str)
         }
-    },
+    };
     ([$($c:expr),*], $err_str:expr, env($e_var:expr, $e_val:expr)) => {
         {
             let mut c = Command::new("xdotool");
@@ -43,16 +43,16 @@ fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
         .spawn()
         .expect("Unable to start Star Sonata exe");
     
-    info!("Started exe, waiting {}s for client to get to initial options screen.", &settings.starsonata_startup.initial_sleep / 1000);
-    thread::sleep(Duration::from_millis(&settings.starsonata_startup.initial_sleep));
-    info!("Waited {}s, client should be on initial options screen.", &settings.starsonata_startup.initial_sleep / 1000);
+    info!("Started exe, waiting {}s for client to get to initial options screen.", settings.starsonata_startup.initial_sleep / 1000);
+    thread::sleep(Duration::from_millis(settings.starsonata_startup.initial_sleep));
+    info!("Waited {}s, client should be on initial options screen.", settings.starsonata_startup.initial_sleep / 1000);
 
-    let mut enigo = Enigo::new(Settings::default()).expect("Unable to setup enigo");
+    let mut enigo = Enigo::new(&Settings::default()).expect("Unable to setup enigo");
     enigo.key(Key::Return, Click).expect("Unable to press Return");
     info!("Pressed Return, loading main client.");
 
-    thread::sleep(Duration::from_millis(&settings.starsonata_startup.client_load_sleep));
-    info!("Waited {}s for the client to load, moving to login.", &settings.starsonata_startup.client_load_sleep / 1000);
+    thread::sleep(Duration::from_millis(settings.starsonata_startup.client_load_sleep));
+    info!("Waited {}s for the client to load, moving to login.", settings.starsonata_startup.client_load_sleep / 1000);
 
     return (handle, None);
 }
@@ -66,8 +66,8 @@ fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
         .spawn()
         .expect("Unable to start Star Sonata exe");
     
-    info!("Started exe, waiting {}s for the client to load", &settings.starsonata_startup.client_load_sleep / 1000);
-    thread::sleep(Duration::from_millis(&settings.starsonata_startup.client_load_sleep));
+    info!("Started exe, waiting {}s for the client to load", settings.starsonata_startup.client_load_sleep / 1000);
+    thread::sleep(Duration::from_millis(settings.starsonata_startup.client_load_sleep));
 
     // first search for the StarSonata window
     let output = Command::new("xdotool")
@@ -78,7 +78,7 @@ fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
     let window = String::from_utf8_lossy(&output.stdout).trim_endd().to_string();
     info!(
         "Waited {}s for the client to load, found window id: {:?} for Star Sonata. Proceeding to login",
-        &settings.starsonata_startup.client_load_sleep / 1000,
+        settings.starsonata_startup.client_load_sleep / 1000,
         window
     );
 
@@ -88,7 +88,7 @@ fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
 #[cfg(not(target_os = "linux"))]
 #[instrument(skip(settings))]
 fn starsonata_login(settings: Arc<AppConfig>, _: Option<String>) {
-    let mut enigo = Enigo::new(Settings::default()).expect("Unable to setup enigo");
+    let mut enigo = Enigo::new(&Settings::default()).expect("Unable to setup enigo");
     
     // should be on the login screen here with cursor selecting the username field
     // first, selecting existing username, remove, and retype just for safety
@@ -111,8 +111,8 @@ fn starsonata_login(settings: Arc<AppConfig>, _: Option<String>) {
     // login
     enigo.key(Key::Return, Click).unwrap();
 
-    info!("Waiting {}s for character screen to load.", &settings.starsonata_startup.character_load_sleep / 1000);
-    thread::sleep(Duration::from_millis(&settings.starsonata_startup.character_load_sleep));
+    info!("Waiting {}s for character screen to load.", settings.starsonata_startup.character_load_sleep / 1000);
+    thread::sleep(Duration::from_millis(settings.starsonata_startup.character_load_sleep));
 
     info!("Selecting the first character via Return key.");
     enigo.key(Key::Return, Click).unwrap();
@@ -153,7 +153,7 @@ fn starsonata_login(settings: Arc<AppConfig>, window: Option<String>) {
     debug!("Press return output: {:?}", out);
 
     // wait for the character screen to load
-    info!("Waiting {}s for character screen to load");
+    info!("Waiting {}s for character screen to load", settings.starsonata_startup.character_load_sleep / 1000);
     thread::sleep(Duration::from_millis(settings.starsonata_startup.character_load_sleep));
 
     info!("Selecting first character through pressing Return.");
