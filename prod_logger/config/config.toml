@@ -1,0 +1,9 @@
+[starsonata_account]
+username = "shadowmoonmoon"
+password = "MoonMoonBotAct"
+
+[starsonata_startup]
+ss_path = "C:\\Users\\lukas\\AppData\\Roaming\\Star Sonata 2 (Beta Client)\\Star Sonata.exe"
+initial_sleep = 3000
+client_load_sleep = 10000
+character_load_sleep = 3000

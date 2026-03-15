@@ -5,6 +5,11 @@ use std::io::{Write, BufWriter, BufReader, Read};
 use std::fs::File;
 use regex::{Regex, RegexSet};
 
+use tracing::{debug, info, warn, error, trace};
+use tracing_subscriber::{EnvFilter, filter::LevelFilter};
+
+use config::Config;
+
 use tokio::signal;
 use tokio::time::{sleep, timeout};
 use tokio::sync::{mpsc, mpsc::{Sender, Receiver}};
@@ -18,165 +23,9 @@ use serenity::utils::MessageBuilder;
 struct Handler;
 
 use prod_logger::device::get_pcap_capture;
+use prod_logger::station_interaction::listen_for_prod;
+use prod_logger::config::AppConfig;
 
-
-fn main1() {
-
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");
-    
-    let mut cap = get_pcap_capture();
-
-    let file = File::create("raw/raw.txt").unwrap();
-    let mut wrt = BufWriter::new(&file);
-
-    while running.load(Ordering::SeqCst) {
-        let packet = cap.next_packet().unwrap();
-        let data = String::from_utf8_lossy(packet.data);
-        
-        wrt.write(&packet.data).unwrap();
-    }
-}
-
-struct Sire { // Station Interaction REgex
-    set: RegexSet,
-    transfer: Regex,
-    use_bp: Regex,
-    construct: Regex,
-    construct_done: Regex,
-    transfer_credits: Regex,
-    equip: Regex
-}
-
-impl Sire {
-    fn new() -> Self {
-        // +Shadow Wolf transferred 1 Fallen Secondary Desolation Beam* out of base
-        // +Shadow Wolf transferred 1 Empyreal Incinerator* out of base
-        // +Shadow Wolf transferred 1 Incineration Rocket* out of base
-
-        // +Shadow Wolf transferred 50,000,000 credits to base
-        // +Shadow Wolf took 50,000,000 credits from base
-        let pats = vec![
-            r"\+(?<player>[[:word:] '\-_]*) transferred (?<quant>[0-9]+) (?<item>[[:word:] '\.\-\*]*) (?<dir>(to|out of)) base",
-            r"\+(?<player>[[:word:] '\-_]*) using (?<item>[[:word:] '\.\-]*) Blueprint",
-            r"\+(?<player>[[:word:] '\-_]*) constructing (?<item>[[:word:] '\.\-]*)",
-            r"Construction finished on (?<quant>[0-9]*) (?<item>[[:word:] '\.\-]*)",
-            r"\+(?<player>[[:word:] '\-_]*) (transferred|took) (?<quant>[[0-9],]+) credits (?<dir>(to|from)) base",
-            r"(?<player>[[:word:] '\-_]*) (?<dir>(un)?equipped) (?<item>[[:word:] '\-\*]*)x(?<quant>[0-9]+)."
-        ];
-        Self {
-            set: RegexSet::new(pats.clone()).unwrap(),
-            transfer: Regex::new(pats[0]).unwrap(),
-            use_bp: Regex::new(pats[1]).unwrap(),
-            construct: Regex::new(pats[2]).unwrap(),
-            construct_done: Regex::new(pats[3]).unwrap(),
-            transfer_credits: Regex::new(pats[4]).unwrap(),
-            equip: Regex::new(pats[5]).unwrap()
-        }
-    }
-
-    fn get_match_capture(&self, a: &str, tx: Sender<String>) {
-        for cap in self.transfer.captures_iter(a) {
-            let line = format!(
-                "\u{001b}[0;34m{}\u{001b}[0;0m transferred \u{001b}[0;34m{}\u{001b}[0;0m \u{001b}[0;33m{}\u{001b}[0;0m {} base",
-                cap.name("player").unwrap().as_str(),
-                cap.name("quant").unwrap().as_str(),
-                cap.name("item").unwrap().as_str(),
-                cap.name("dir").unwrap().as_str()
-            );
-            if let Err(why) = tx.blocking_send(line) {
-                println!("Unable to transmit captured line: {:?}", why);
-            }
-        }
-        for cap in self.use_bp.captures_iter(a) {
-            let line = format!(
-                "\u{001b}[0;34m{}\u{001b}[0;0m using \u{001b}[0;33m{}\u{001b}[0;0m Blueprint",
-                cap.name("player").unwrap().as_str(),
-                cap.name("item").unwrap().as_str(),
-            );
-            if let Err(why) = tx.blocking_send(line) {
-                println!("Unable to transmit captured line: {:?}", why);
-            }
-        }
-        for cap in self.construct.captures_iter(a) {
-            let line = format!(
-                "\u{001b}[0;34m{}\u{001b}[0;0m constructing \u{001b}[0;33m{}\u{001b}[0;0m",
-                cap.name("player").unwrap().as_str(),
-                cap.name("item").unwrap().as_str()
-            );
-            if let Err(why) = tx.blocking_send(line) {
-                println!("Unable to transmit captured line: {:?}", why);
-            }
-        }
-        for cap in self.construct_done.captures_iter(a) {
-            let line = format!(
-                "Construction finished on \u{001b}[0;34m{}\u{001b}[0;0m \u{001b}[0;33m{}\u{001b}[0;0m",
-                cap.name("quant").unwrap().as_str(),
-                cap.name("item").unwrap().as_str(),
-            );
-            if let Err(why) = tx.blocking_send(line) {
-                println!("Unable to transmit captured line: {:?}", why);
-            }
-        }
-        for cap in self.transfer_credits.captures_iter(a) {
-            let line = format!(
-                "\u{001b}[0;34m{}\u{001b}[0;0m transferred \u{001b}[0;34m{}\u{001b}[0;0m credits {} base",
-                cap.name("player").unwrap().as_str(),
-                cap.name("quant").unwrap().as_str(),
-                cap.name("dir").unwrap().as_str()
-            );
-            if let Err(why) = tx.blocking_send(line) {
-                println!("Unable to transmit captured line: {:?}", why);
-            }
-        }
-        for cap in self.equip.captures_iter(a) {
-            let line = format!(
-                "\u{001b}[0;34m{}\u{001b}[0;0m \u{001b}[0;35m{}\u{001b}[0;0m \u{001b}[0;34m{}\u{001b}[0;0m \u{001b}[0;33m{}\u{001b}[0;0m",
-                cap.name("player").unwrap().as_str(),
-                cap.name("dir").unwrap().as_str(),
-                cap.name("quant").unwrap().as_str(),
-                cap.name("item").unwrap().as_str()
-            );
-            if let Err(why) = tx.blocking_send(line) {
-                println!("Unable to transmit captured line: {:?}", why);
-            }
-        }
-    }
-}
-
-
-fn listen_for_prod(tx: Sender<String>) {
-    let mut cap = get_pcap_capture();
-
-    static SIRE: LazyLock<Sire> = LazyLock::new(|| Sire::new());
-
-    let file = File::create("raw/raw.txt").unwrap();
-    let mut wrt = BufWriter::new(&file);
-    let mut i = 0;
-
-    let now = SystemTime::now();
-
-    loop {
-        match cap.next_packet() {
-            Ok(packet) => {
-                let data = String::from_utf8_lossy(packet.data);
-                wrt.write(format!("{} - {}\n", i, now.elapsed().unwrap().as_secs_f64()).as_bytes());
-                wrt.write(&packet.data);
-                wrt.write(b"\n");
-
-                if SIRE.set.is_match(&data) {
-                    SIRE.get_match_capture(&data, tx.clone());
-                }
-            },
-            Err(_) => continue,
-        };
-        i += 1;
-    }
-}
 
 async fn send_prod_logs(mut rx: Receiver<String>, ctx: Context, channel_id: ChannelId) {
     let mut mb = MessageBuilder::new();
@@ -267,12 +116,25 @@ impl EventHandler for Handler {
 
 #[tokio::main]
 async fn main() {
-    let file = File::open(".token").unwrap();
-    let mut rdr = BufReader::new(file);
-    let mut buf: Vec<u8> = vec![];
+    // logging setup
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .from_env()
+        .unwrap();
+    
+    let _subscriber = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .init();
+    
+    // load settings
+    let settings = Config::builder()
+        .add_source(config::File::with_name("config/config.toml"))
+        .build()
+        .unwrap();
+    let settings: Arc<AppConfig> = Arc::new(settings.try_deserialize().unwrap());
 
-    let _ = rdr.read_to_end(&mut buf).unwrap();
-    let token = String::from_utf8_lossy(&buf);
+    // get the discord bot token
+    let token = std::fs::read_to_string(".token").expect("Unable to read token file");
 
     // Set gateway intents, which decides what events the bot will be notified about
     let intents = GatewayIntents::GUILD_MESSAGES
@@ -295,6 +157,7 @@ async fn main() {
     //
     // Shards will automatically attempt to reconnect, and will perform exponential backoff until
     // it reconnects.
+    info!("Starting discord bot client");
     if let Err(why) = client.start().await {
         println!("Client error: {why:?}");
     }

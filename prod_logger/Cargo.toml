@@ -4,8 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+config = "0.15.21"
 ctrlc = "3.4.6"
 pcap = "2.2.0"
 regex = "1.11.1"
+secrecy = "0.10.3"
+serde = "1.0.228"
 serenity = "0.12.5"
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "signal"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+
+[target.'cfg(windows)'.dependencies]
+enigo = "0.6.1"

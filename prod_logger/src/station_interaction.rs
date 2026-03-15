@@ -1,6 +1,8 @@
 use regex::{Regex, RegexSet};
 use tokio::sync::mpsc::Sender;
 
+use prod_logger::device::get_pcap_capture;
+
 // define some macros so that all our colors stay constant
 macro_rules! player {
     ($player_string:ident) => {
@@ -20,19 +22,18 @@ macro_rules! item {
     }
 }
 
-macro_rules! equip_dir! {
+macro_rules! equip_dir {
     ($dir_string:ident) => {
-        format_args!("\u{001b}[0;35m{}\u{001b}[0;0m")
+        format_args!("\u{001b}[0;35m{}\u{001b}[0;0m", $dir_string)
     }
 }
 
 struct StationMonitor {
-    set: RegexSet,
+    re_set: RegexSet,
     transfer: Regex,
     use_bp: Regex,
     construct: Regex,
     construct_done: Regex,
-    transfer_credits: Regex,
     equip: Regex,
 }
 
@@ -52,7 +53,7 @@ impl StationMonitor {
             r"(?<player>[[:word:] '\-_]*) (?<dir>(un)?equipped) (?<item>[[:word:] '\-\*]*)x(?<quant>[0-9]+)."
         ];
         Self {
-            set: RegexSet::new(patterns.clone()).unwrap(),
+            re_set: RegexSet::new(patterns.clone()).unwrap(),
             transfer: Regex::new(patterns[0]).unwrap(),
             use_bp: Regex::new(patterns[1]).unwrap(),
             construct: Regex::new(patterns[2]).unwrap(),
@@ -121,6 +122,26 @@ impl StationMonitor {
             if let Err(why) = tx.blocking_send(line) {
                 println!("Unable to transmit captured line: {:?}", why);
             }
+        }
+    }
+}
+
+
+pub fn listen_for_prod(tx: Sender<String>) {
+    let mut cap = get_pcap_capture();
+
+    static STATION_MONITOR: LazyLock<StationMonitor> = LazyLock::new(|| StationMonitor::new());
+
+    loop {
+        match cap.next_packet() {
+            Ok(packet) => {
+                let data = String::from_utf8_lossy(packet.data);
+
+                if STATION_MONITOR.re_set.is_match(&data) {
+                    STATION_MONITOR.get_match_capture(&ddata, tx.clone());
+                }
+            },
+            Err(_) => continue,
         }
     }
 }
