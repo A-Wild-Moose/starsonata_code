@@ -37,8 +37,20 @@ macro_rules! xdotool {
 
 
 #[cfg(not(target_os = "linux"))]
+pub fn get_sleep_time(settings: Arc<AppConfig>) -> u64 {
+    (settings.starsonata_startup.initial_sleep + settings.starsonata_startup.client_load_sleep) / 1000
+}
+
+
+#[cfg(target_os = "linux")]
+pub fn get_sleep_time(settings: Arc<AppConfig>) -> u64 {
+    (settings.starsonata_startup.client_load_sleep) / 1000
+}
+
+
+#[cfg(not(target_os = "linux"))]
 #[instrument(skip(settings))]
-fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
+pub fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
     let handle = Command::new(&settings.starsonata_startup.ss_path)
         .spawn()
         .expect("Unable to start Star Sonata exe");
@@ -59,7 +71,7 @@ fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
 
 #[cfg(target_os = "linux")]
 #[tracing::instrument(skip(settings))]
-fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
+pub fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
     let handle = Command::new("wine")
         .arg(&settings.starsonata_startup.ss_path)
         .env("DISPLAY", ":0.0")
@@ -87,7 +99,7 @@ fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
 
 #[cfg(not(target_os = "linux"))]
 #[instrument(skip(settings))]
-fn starsonata_login(settings: Arc<AppConfig>, _: Option<String>) {
+pub fn starsonata_login(settings: Arc<AppConfig>, _: Option<String>) {
     let mut enigo = Enigo::new(&Settings::default()).expect("Unable to setup enigo");
     
     // should be on the login screen here with cursor selecting the username field
@@ -121,7 +133,7 @@ fn starsonata_login(settings: Arc<AppConfig>, _: Option<String>) {
 
 #[cfg(target_os = "linux")]
 #[tracing::instrument(skip(settings))]
-fn starsonata_login(settings: Arc<AppConfig>, window: Option<String>) {
+pub fn starsonata_login(settings: Arc<AppConfig>, window: Option<String>) {
     let window = window.expect("Window ID was not set");
 
     // Should be on the first login screen here. Cursor should be selecting the username field
@@ -159,17 +171,4 @@ fn starsonata_login(settings: Arc<AppConfig>, window: Option<String>) {
     info!("Selecting first character through pressing Return.");
     let out = xdotool!(["key", "--window", &window, "Return"], "Unable to press return to select character");
     debug!("Character select Return output: {:?}", out);
-}
-
-// Main function for running the Star Sonata client, and handling re-starts, etc
-#[tracing::instrument(skip(settings))]
-pub fn starsonata_run(settings: Arc<AppConfig>) {
-    // start up the client
-    info!("Starting the Star Sonata client.");
-    let (mut handle, window) = starsonata_start(settings.clone());
-
-    // Log into the client
-    info!("Logging into the client");
-    starsonata_login(settings.clone(), window);
-
 }

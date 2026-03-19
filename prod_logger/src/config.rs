@@ -1,8 +1,13 @@
 use serde::Deserialize;
 use secrecy::SecretBox;
+use poise::serenity_prelude::ChannelId;
 
-
-#[derive(serde::Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
+pub struct DiscordConfig {
+    pub bot_token: String,
+    pub prod_log_channel_id: ChannelId,
+}
+#[derive(Deserialize, Debug)]
 pub struct StarSonataAccount {
     pub username: String,
     pub password: SecretBox<String>
@@ -19,6 +24,7 @@ pub struct StarSonataStartup {
 
 #[derive(Deserialize, Debug)]
 pub struct AppConfig {
+    pub discord: DiscordConfig,
     pub starsonata_account: StarSonataAccount,
     pub starsonata_startup: StarSonataStartup,
 }

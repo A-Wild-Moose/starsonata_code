@@ -1,7 +1,9 @@
-use std::sync::LazyLock;
+use std::sync::{Arc, Mutex, LazyLock};
 
 use regex::{Regex, RegexSet};
 use tokio::sync::mpsc::Sender;
+use tokio_util::sync::CancellationToken;
+use tracing::{instrument, info};
 
 use super::device::get_pcap_capture;
 
@@ -60,7 +62,7 @@ impl StationMonitor {
             use_bp: Regex::new(patterns[1]).unwrap(),
             construct: Regex::new(patterns[2]).unwrap(),
             construct_done: Regex::new(patterns[3]).unwrap(),
-            equip: Regex::new(patterns[5]).unwrap()
+            equip: Regex::new(patterns[4]).unwrap()
         }
     }
 
@@ -129,12 +131,14 @@ impl StationMonitor {
 }
 
 
-pub fn listen_for_prod(tx: Sender<String>) {
+#[instrument(skip(tx, cancel_token))]
+pub fn listen_for_prod(tx: Sender<String>, cancel_token: CancellationToken) {
+    info!("Getting capture device...");
     let mut cap = get_pcap_capture();
 
     static STATION_MONITOR: LazyLock<StationMonitor> = LazyLock::new(|| StationMonitor::new());
 
-    loop {
+    while !cancel_token.is_cancelled() {
         match cap.next_packet() {
             Ok(packet) => {
                 let data = String::from_utf8_lossy(packet.data);

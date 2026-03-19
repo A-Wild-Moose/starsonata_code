@@ -4,14 +4,17 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+chrono = { version = "0.4.44", features = ["clock"] }
 config = "0.15.21"
 ctrlc = "3.4.6"
 pcap = "2.2.0"
+poise = "0.6.1"
 regex = "1.11.1"
 secrecy = { version = "0.10.3", features = ["serde"] }
 serde = "1.0.228"
 serenity = "0.12.5"
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "signal"] }
+tokio-util = "0.7.18"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
