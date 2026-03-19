@@ -31,23 +31,6 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
 
-// let mut mb = serenity::MessageBuilder::new();
-// mb.push_codeblock_safe(log_line, Some("ansi"));
-
-// if let Err(why) = ctx.data().log_channel_id.unwrap().say(ctx.serenity_context().http.clone(), &mb.build()).await {
-//     warn!("Error sending message: {why:?}");
-// }
-// let channel_id = ChannelId::new(1476998955337519297);
-
-// let (tx, rx) = mpsc::channel(128);
-
-// let prod_watch_handle = thread::spawn(|| {
-//     listen_for_prod(tx);
-// });
-// tokio::spawn(async move {
-//     send_prod_logs_to_discord(rx, ctx, channel_id).await;
-// });
-
 
 async fn send_prod_logs_to_discord(mut rx: Receiver<String>, channel_id: serenity::ChannelId, http: Arc<serenity::Http>, shutdown_token: CancellationToken) {
     // initialize a new message builder
@@ -79,6 +62,7 @@ async fn send_prod_logs_to_discord(mut rx: Receiver<String>, channel_id: serenit
 }
 
 
+/// Shuts down any running Star Sonata client, data capture, and prod logging, and then the bot itself.
 #[instrument(skip(ctx))]
 #[poise::command(slash_command)]
 async fn shutdown_all(ctx: Context<'_>) -> Result<(), Error> {
@@ -105,6 +89,7 @@ async fn shutdown_all(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 
+/// Starts the Star Sonata client and logs in
 #[instrument(skip(ctx))]
 #[poise::command(slash_command)]
 async fn start_starsonata(ctx: Context<'_>) -> Result<(), Error> {
@@ -140,7 +125,9 @@ async fn start_starsonata(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 
-
+/// Starts capturing of SS data and logging station messages to discord.
+/// Run after /start_starsonata
+#[instrument(skip(ctx))]
 #[poise::command(slash_command)]
 async fn start_capturing_and_logging(ctx: Context<'_>) -> Result<(), Error> {
     // create the channel for prod log communication
@@ -167,6 +154,13 @@ async fn start_capturing_and_logging(ctx: Context<'_>) -> Result<(), Error> {
     let prod_watch_handle = thread::spawn(|| {
         listen_for_prod(tx, c_token2);
     });
+    
+    // React/reply to the command invocation
+    ctx.send(poise::CreateReply::default()
+        .content("Spun up the communcation with discord, and listening for star sonata data from the prod.")
+        .ephemeral(true)
+    ).await.unwrap();
+
     Ok(())
 }
 
