@@ -87,7 +87,7 @@ pub fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
         .env("DISPLAY", ":0.0")
         .output()
         .expect("Unable to search for the Star Sonata window");
-    let window = String::from_utf8_lossy(&output.stdout).trim_endd().to_string();
+    let window = String::from_utf8_lossy(&output.stdout).trim_end().to_string();
     info!(
         "Waited {}s for the client to load, found window id: {:?} for Star Sonata. Proceeding to login",
         settings.starsonata_startup.client_load_sleep / 1000,
