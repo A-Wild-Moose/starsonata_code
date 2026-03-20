@@ -144,7 +144,7 @@ pub fn starsonata_login(settings: Arc<AppConfig>, window: Option<String>) {
 
     // ignoring delete key command here since selecting and then retyping should clear
     info!("Typing username");
-    let out = xdotool!(["type", "--window", &window, &settings.username], "Unable to type username");
+    let out = xdotool!(["type", "--window", &window, &settings.starsonata_account.username], "Unable to type username");
     debug!("Typing username output: {:?}", out);
 
     // tab to password
@@ -156,7 +156,7 @@ pub fn starsonata_login(settings: Arc<AppConfig>, window: Option<String>) {
     debug!("Select password output: {:?}", out);
 
     info!("Typing passsword");
-    let out = xdotool!(["type", "--window", &window, settings.password.expose_secret()], "Unable to type password");
+    let out = xdotool!(["type", "--window", &window, settings.starsonata_account.password.expose_secret()], "Unable to type password");
     debug!("Type password output: {:?}", out);
 
     // log in
