@@ -25,6 +25,7 @@ struct Data {
     ss_handle: Mutex<Option<std::process::Child>>,
     ss_window_id: Mutex<Option<String>>,
     shutdown_token: CancellationToken,
+    bot_shutdown_token: CancellationToken,
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -65,26 +66,42 @@ async fn send_prod_logs_to_discord(mut rx: Receiver<String>, channel_id: serenit
 /// Shuts down any running Star Sonata client, data capture, and prod logging, and then the bot itself.
 #[instrument(skip(ctx))]
 #[poise::command(slash_command)]
-async fn shutdown_all(ctx: Context<'_>) -> Result<(), Error> {
+async fn shutdown(
+    ctx: Context<'_>,
+    #[description = "Shutdown the bot. Any value entered here will indicate to include the bot in the shutdown."] shutdown_bot: Option<bool>
+) -> Result<(), Error> {
     // let the user know we are shutting down bot
     ctx.send(poise::CreateReply::default()
-        .content("Recieved shutdown command, shutting bot down.")
+        .content("Recieved shutdown command, shutting monitoring and Star Sonata processes down.")
         .ephemeral(true)
     ).await.unwrap();
 
-    let mut handle = ctx.data().ss_handle.lock().unwrap();
-    let output = match &mut *handle {
+    match &mut *ctx.data().ss_handle.lock().unwrap() {
         Some(h) => {
-            info!("Active Star Sonata handle, shutting down.");
-            h.kill()
+            info!("Found running Star Sonata instance, shutting it down.")
+            h.kill().expect("Unable to shut down Star Sonata task.");
         },
-        _ => Ok(())
-    };
-    drop(handle); //try to avoid poisoning if we can't kill the task
-    output.expect("Unable to kill Star Sonata task");
+        _ => {}
+    }
+    // reset handle value
+    *ctx.data().ss_handle.lock().unwrap() = None;
 
-    info!("Shutting bot down after recieving shut-down Discord command.");
+    // send cancellation token to the monitoring tasks
+    info!("Sending cancellation tokens to monitoring tasks.");
     ctx.data().shutdown_token.cancel();
+
+    // check if we are shutting bot down
+    match shutdown_bot {
+        Some(true) => {
+            info!("True value set for shutting down bot, shutting the Discord bot down.");
+            ctx.send(poise::CreateReply::default()
+                .content("Shutting down bot as well.")
+                .ephemeral(true)
+            ).await.unwrap();
+            ctx.data().bot_shutdown_token.cancel();
+        }
+        _ => {}
+    }
     Ok(())
 }
 
@@ -93,6 +110,27 @@ async fn shutdown_all(ctx: Context<'_>) -> Result<(), Error> {
 #[instrument(skip(ctx))]
 #[poise::command(slash_command)]
 async fn start_starsonata(ctx: Context<'_>) -> Result<(), Error> {
+    // check that we dont already have a Star Sonata client running
+    let reply = match *ctx.data().ss_handle.lock().unwrap() {
+        Some(_) => {
+            info!("Star Sonata client already exists, not creating a new one. Try shutting it down first");
+            Some(ctx.send(poise::CreateReply::default()
+                .content("Star Sonata client already exists, not creating a new one. Try shutting it down first")
+                .ephemeral(true)
+            ))
+        },
+        _ => {None}
+    };
+
+    // now match if there is a reply to send
+    match reply {
+        Some(r) => {
+            r.await.unwrap();
+            return Err("Star sonata client already exists, not creating a new one.".into())
+        },
+        None => {}
+    }
+
     info!("Starting Star Sonata client");
     let utc_now = chrono::Utc::now().timestamp();
     let utc_startup = utc_now + i64::try_from(get_sleep_time(ctx.data().settings.clone())).unwrap();
@@ -195,11 +233,13 @@ async fn main() {
     // Create the shutdown notification system
     let shutdown_token = CancellationToken::new();
     let shutdown_clone = shutdown_token.clone();
+    let bot_shutdown_token = CancellationToken::new();
+    let bot_shutdown_clone = bot_shutdown_token.clone();
 
     let framework = poise::Framework::builder()
         .options(
             poise::FrameworkOptions {
-                commands: vec![start_capturing_and_logging(), start_starsonata(), shutdown_all()],
+                commands: vec![start_capturing_and_logging(), start_starsonata(), shutdown()],
                 ..Default::default()
         })
         .setup(move |ctx, _ready, framework| {
@@ -210,6 +250,7 @@ async fn main() {
                     ss_handle: Mutex::new(None),
                     ss_window_id: Mutex::new(None),
                     shutdown_token: shutdown_clone,
+                    bot_shutdown_token: bot_shutdown_clone,
                 })
             })
         })
@@ -227,7 +268,10 @@ async fn main() {
     // Shutdown handler for ctrl-c
     tokio::spawn(async move {
         tokio::select! {
-            _ = shutdown_token.cancelled() => {shard_manager1.shutdown_all().await},
+            _ = bot_shutdown_token.cancelled() => {
+                shutdown_token.cancel();
+                shard_manager1.shutdown_all().await;
+            },
             _ = signal::ctrl_c() => {
                 shutdown_token.cancel();
                 shard_manager1.shutdown_all().await;

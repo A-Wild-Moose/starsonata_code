@@ -50,7 +50,7 @@ impl StationMonitor {
         // +Shadow Wolf transferred 50,000,000 credits to base
         // +Shadow Wolf took 50,000,000 credits from base
         let patterns = vec![
-            r"\+(?<player>[[:word:] '\-_]*) (transferred|took) (?<quant>[0-9]+) (?<item>[[:word:] '\.\-\*]*) (?<dir>(to|out of|from)) base",
+            r"\+(?<player>[[:word:] '\-_]*) (?:transferred|took) (?<quant>[0-9]+) (?<item>[[:word:] '\.\-\*]*) (?<dir>to|out of|from) base",
             r"\+(?<player>[[:word:] '\-_]*) using (?<item>[[:word:] '\.\-]*) Blueprint",
             r"\+(?<player>[[:word:] '\-_]*) constructing (?<item>[[:word:] '\.\-]*)",
             r"Construction finished on (?<quant>[0-9]*) (?<item>[[:word:] '\.\-]*)",
