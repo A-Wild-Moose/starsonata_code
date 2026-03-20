@@ -3,7 +3,7 @@ use std::process::{Command, Child};
 use std::{thread, time::Duration};
 
 use secrecy::ExposeSecret;
-use tracing::{instrument, info, warn};
+use tracing::{instrument, info, warn, debug};
 
 #[cfg(not(target_os = "linux"))]
 use enigo::{Key, Keyboard, Enigo, Settings, Direction::{Click, Press, Release}};
@@ -13,7 +13,7 @@ use super::config::AppConfig;
 
 #[macro_export]
 macro_rules! xdotool {
-    ([$($c:expr),*], $err_str:expr) => {
+    ([$($x:expr),*], $err_str:expr) => {
         {
             let mut c = Command::new("xdotool");
             c.env("DISPLAY", ":0.0");
@@ -23,7 +23,7 @@ macro_rules! xdotool {
             c.output().expect($err_str)
         }
     };
-    ([$($c:expr),*], $err_str:expr, env($e_var:expr, $e_val:expr)) => {
+    ([$($x:expr),*], $err_str:expr, env($e_var:expr, $e_val:expr)) => {
         {
             let mut c = Command::new("xdotool");
             c.env($e_var, $e_val);

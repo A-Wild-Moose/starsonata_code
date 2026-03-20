@@ -78,7 +78,7 @@ async fn shutdown(
 
     match &mut *ctx.data().ss_handle.lock().unwrap() {
         Some(h) => {
-            info!("Found running Star Sonata instance, shutting it down.")
+            info!("Found running Star Sonata instance, shutting it down.");
             h.kill().expect("Unable to shut down Star Sonata task.");
         },
         _ => {}
