@@ -94,7 +94,7 @@ pub fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
         window
     );
 
-    return (handle, Some(Window));
+    return (handle, Some(window));
 }
 
 #[cfg(not(target_os = "linux"))]
