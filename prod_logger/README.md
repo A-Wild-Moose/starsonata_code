@@ -5,7 +5,18 @@ wine for ARM
 
 `Xvfb` virtual frame buffer
 ```bash
-xvfb :0 -screen 0 1024x768x16
+xvfb-run -f <auth-file> -a <program/command>
+```
+
+```bash
+ps -ef|grep Xvfb  # to find the screen/display variable
+DISPLAY=:X.Y XAUTHORITY=<auth-file> xdotool search --name Sonata  # find the window ID for star sonata
+```
+
+
+This not preferred as it leaves Xvfb running
+```bash
+Xvfb :0 -screen 0 1024x768x16
 "ctrl+c"
 DISPLAY=:0.0 wine starsonata2_installer.exe
 ```

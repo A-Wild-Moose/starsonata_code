@@ -51,11 +51,15 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Optio
 #[cfg(target_os = "linux")]
 #[tracing::instrument(skip(settings))]
 fn ss_start(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Option<String>) {
-    let handle = Command::new("wine")
-            .arg(&settings.starsonatastartup.ss_path)
-            .env("DISPLAY", ":0.0")
-            .spawn()
-            .expect("Unable to start exe");
+    // let handle = Command::new("wine")
+    //         .arg(&settings.starsonatastartup.ss_path)
+    //         .env("DISPLAY", ":0.0")
+    //         .spawn()
+    //         .expect("Unable to start exe");
+    let handle = Command::new("xvfb-run")
+        .args(["-f", "~/.xauth", "-n", "99", "wine", &settings.starsonatastartup.ss_path])
+        .spawn()
+        .expect("Unable to start exe")
 
     // wait for the client to load
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.client_load_sleep));
@@ -64,7 +68,8 @@ fn ss_start(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Option<St
     // first search for the star sonata window
     let output = Command::new("xdotool")
         .args(["search", "--name", ".*Star Sonata.*"])
-        .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to search for Star Sonata window.");
     let window = String::from_utf8_lossy(&output.stdout).trim_end().to_string();
@@ -113,7 +118,9 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
     // first search for the star sonata window
     let output = Command::new("xdotool")
         .args(["search", "--name", ".*Star Sonata.*"])
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to search for Star Sonata window.");
     let window = String::from_utf8_lossy(&output.stdout).trim_end().to_string();
@@ -122,7 +129,9 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
     // try focusing on window first?
     let out = Command::new("xdotool")
         .args(["windowfocus", "--sync", &window])
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to focus on window");
     tracing::debug!("Focus window output: {:?}", out);
@@ -130,14 +139,18 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
     // select the username to re-type
     let out = Command::new("xdotool")
         .args(["key", "--window", &window, "ctrl+a"])
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to select username");
     tracing::debug!("Select username output: {:?}", out);
 
     let out = Command::new("xdotool")
         .args(["key", "--window", &window, "Delete"])
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to delete username");
     tracing::debug!("Delete username output: {:?}", out);
@@ -145,7 +158,9 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
     tracing::info!("Typing username");
     let out = Command::new("xdotool")
         .args(["type", "--window", &window, &settings.username])
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to type username");
     tracing::debug!("Typing username output: {:?}", out);
@@ -153,35 +168,45 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
     // move to password
     let out = Command::new("xdotool")
         .args(["key", "--window", &window, "0xff09"])
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to tab to password");
     tracing::debug!("Tab to password output: {:?}", out);
 
     let out = Command::new("xdotool")
         .args(["key", "--window", &window, "ctrl+a"])
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to select password");
     tracing::debug!("Select password output: {:?}", out);
 
     let out = Command::new("xdotool")
         .args(["key", "--window", &window, "Delete"])
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to delete password");
     tracing::debug!("Delete password output: {:?}", out);
 
     let out = Command::new("xdotool")
         .args(["type", "--window", &window, settings.password.expose_secret()])
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to type password");
     tracing::debug!("Type password output: {:?}", out);
 
     let out = Command::new("xdotool")
         .args(["key", "--window", &window, "Return"])
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to enter user credentials");
     tracing::debug!("Enter credentials output: {:?}", out);
@@ -193,7 +218,9 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
     // first search for the star sonata window
     let output = Command::new("xdotool")
         .args(["search", "--name", ".*Star Sonata.*"])
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to search for Star Sonata window.");
     println!("{:?}", &output.stdout);
@@ -202,7 +229,9 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
     
     let out = Command::new("xdotool")
         .args(["key", "--window", &window, "Return"])
-        .env("DISPLAY", ":0.0")
+        // .env("DISPLAY", ":0.0")
+        .env("DISPLAY", ":99.0")
+        .env("XAUTHORITY", "~/.xauth")
         .output()
         .expect("Unable to select character");
     tracing::debug!("Character select output: {:?}", out);
