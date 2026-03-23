@@ -118,6 +118,14 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
         .expect("Unable to search for Star Sonata window.");
     let window = String::from_utf8_lossy(&output.stdout).trim_end().to_string();
     tracing::info!("Found window id: {:?} for Star Sonata.", window);
+
+    // try focusing on window first?
+    let out = Command::new("xdotool")
+        .args(["windowfocus", "--sync", &window])
+        .env("DISPLAY", ":0.0")
+        .output()
+        .expect("Unable to focus on window");
+    tracing::debug!("Focus window output: {:?}", out);
     // Should be on the first login screen here. Cursor should be selecting the username field
     // select the username to re-type
     let out = Command::new("xdotool")
