@@ -16,7 +16,7 @@ macro_rules! xdotool {
     ([$($x:expr),*], $err_str:expr) => {
         {
             let mut c = Command::new("xdotool");
-            c.env("DISPLAY", ":0.0");
+            // c.env("DISPLAY", ":0.0");
             $(
                 c.arg($x);
             )*
