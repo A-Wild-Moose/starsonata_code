@@ -1,8 +1,6 @@
 use std::process::{Command, Child};
 use std::{thread, time};
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
-use std::rc::Rc;
-use std::cell::RefCell;
 
 use config::Config;
 use enigo::{Key, Keyboard, Enigo, Settings};
@@ -30,7 +28,11 @@ struct AppConfig {
 
 #[cfg(not(target_os = "linux"))]
 #[tracing::instrument(skip(settings))]
-fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Option<String>) {
+fn ss_start(settings: Rc<AppConfig>) -> (Child, Option<String>) {
+    let mut enigo_settings = Settings::default();
+    let enigo = Enigo::new(&enigo_settings).unwrap();
+
+
     let handle = Command::new(&settings.starsonatastartup.ss_path)
         .spawn()
         .expect("Unable to start exe");
@@ -38,7 +40,6 @@ fn ss_start(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Optio
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.initial_sleep));
 
     tracing::info!("waited {}s starting SS client from options menu screen.", &settings.starsonatastartup.initial_sleep);
-    let mut enigo = enigo.borrow_mut();
     let _ = enigo.key(Key::Return, Click);
 
     // wait for the client to load
@@ -80,8 +81,9 @@ fn ss_start(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Option<St
 
 #[cfg(not(target_os = "linux"))]
 #[tracing::instrument(skip(settings))]
-fn ss_login(enigo: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<String>) {
-    let mut enigo = enigo.borrow_mut();
+fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
+    let mut enigo_settings = Settings::default();
+    let enigo = Enigo::new(&enigo_settings).unwrap();
     // Should be on the login screen here with cursor selecting the username field
     // First, select existing username, remove and then retype
     tracing::info!("Setting username");
@@ -257,10 +259,6 @@ fn main() {
         .with_env_filter(filter)
         .init();
     
-    // let enigo = Arc::new(Mutex::new(Enigo::new(&Settings::default()).unwrap()));
-    let mut enigo_settings = Settings::default();
-    enigo_settings.x11_display = Some(":0.0".to_string());
-    let enigo = Rc::new(RefCell::new(Enigo::new(&enigo_settings).unwrap()));
 
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -269,9 +267,9 @@ fn main() {
         r.store(false, Ordering::SeqCst);
     }).expect("Error setting Ctrl-C handler");
 
-    let (mut handle, window) = ss_start(enigo.clone(), settings.clone());
+    let (mut handle, window) = ss_start(settings.clone());
 
-    ss_login(enigo.clone(), settings.clone(), window);
+    ss_login(settings.clone(), window);
 
     while running.load(Ordering::SeqCst) {}
 
