@@ -54,7 +54,7 @@ fn ss_start(settings: Rc<AppConfig>) -> (Child, Option<String>) {
 
 #[cfg(target_os = "linux")]
 #[tracing::instrument(skip(settings))]
-fn ss_start(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Option<String>) {
+fn ss_start(settings: Rc<AppConfig>) -> (Child, Option<String>) {
     // let handle = Command::new("wine")
     //         .arg(&settings.starsonatastartup.ss_path)
     //         .env("DISPLAY", ":0.0")
@@ -117,7 +117,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
 
 #[cfg(target_os = "linux")]
 #[tracing::instrument(skip(settings))]
-fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<String>) {
+fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
     let window = window.expect("Window id was not set properly");
 
     // first search for the star sonata window
