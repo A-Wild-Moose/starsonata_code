@@ -2,9 +2,12 @@ use std::process::{Command, Child};
 use std::{thread, time};
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 
-use config::Config;
+#[cfg(not(target_os = "linux"))]
 use enigo::{Key, Keyboard, Enigo, Settings};
+#[cfg(not(target_os = "linux"))]
 use enigo::Direction::{Click, Press, Release};
+
+use config::Config;
 use tracing;
 use tracing_subscriber;
 use secrecy::{SecretBox, ExposeSecret};

@@ -6,8 +6,10 @@ edition = "2024"
 [dependencies]
 config = "0.15.19"
 ctrlc = "3.5.2"
-enigo = "0.6.1"
 secrecy = { version = "0.10.3", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+
+[target.'cfg(windows)'.dependencies]
+enigo = "0.6.1"
