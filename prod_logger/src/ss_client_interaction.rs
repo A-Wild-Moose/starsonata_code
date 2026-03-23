@@ -17,7 +17,7 @@ macro_rules! xdotool {
         {
             let mut c = Command::new("xdotool");
             c.env("DISPLAY", ":99.0");
-            c.env("XAUTHORITY", "/home/ubuntu/.xauth")
+            c.env("XAUTHORITY", "/home/ubuntu/.xauth");
             $(
                 c.arg($x);
             )*
