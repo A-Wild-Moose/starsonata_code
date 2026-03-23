@@ -1,6 +1,7 @@
 use std::process::{Command, Child};
 use std::{thread, time};
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::rc::Rc;
 
 #[cfg(not(target_os = "linux"))]
 use enigo::{Key, Keyboard, Enigo, Settings};
