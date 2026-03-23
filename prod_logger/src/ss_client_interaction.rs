@@ -16,7 +16,8 @@ macro_rules! xdotool {
     ([$($x:expr),*], $err_str:expr) => {
         {
             let mut c = Command::new("xdotool");
-            // c.env("DISPLAY", ":0.0");
+            c.env("DISPLAY", ":99.0");
+            c.env("XAUTHORITY", "/home/ubuntu/.xauth")
             $(
                 c.arg($x);
             )*
@@ -72,9 +73,8 @@ pub fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
 #[cfg(target_os = "linux")]
 #[tracing::instrument(skip(settings))]
 pub fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
-    let handle = Command::new("wine")
-        .arg(&settings.starsonata_startup.ss_path)
-        .env("DISPLAY", ":0.0")
+    let handle = Command::new("xvfb-run")
+        .args(["-f", "/home/ubuntu/.xauth", "-n", "99", "wine", &settings.starsonata_startup.ss_path])
         .spawn()
         .expect("Unable to start Star Sonata exe");
     
@@ -82,11 +82,7 @@ pub fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
     thread::sleep(Duration::from_millis(settings.starsonata_startup.client_load_sleep));
 
     // first search for the StarSonata window
-    let output = Command::new("xdotool")
-        .args(["search", "--name", ".*Star Sonata.*"])
-        .env("DISPLAY", ":0.0")
-        .output()
-        .expect("Unable to search for the Star Sonata window");
+    let output = xdotool!(["search", "--name", "Star Sonata$"], "Unable to search for the Star Sonata window.");
     let window = String::from_utf8_lossy(&output.stdout).trim_end().to_string();
     info!(
         "Waited {}s for the client to load, found window id: {:?} for Star Sonata. Proceeding to login",
