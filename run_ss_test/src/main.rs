@@ -59,7 +59,7 @@ fn ss_start(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>) -> (Child, Option<St
     let handle = Command::new("xvfb-run")
         .args(["-f", "~/.xauth", "-n", "99", "wine", &settings.starsonatastartup.ss_path])
         .spawn()
-        .expect("Unable to start exe")
+        .expect("Unable to start exe");
 
     // wait for the client to load
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.client_load_sleep));
