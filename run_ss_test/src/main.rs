@@ -62,7 +62,7 @@ fn ss_start(settings: Rc<AppConfig>) -> (Child, Option<String>) {
     //         .spawn()
     //         .expect("Unable to start exe");
     let handle = Command::new("xvfb-run")
-        .args(["-f", "~/.xauth", "-n", "99", "wine", &settings.starsonatastartup.ss_path])
+        .args(["-f", "/home/ubuntu/.xauth", "-n", "99", "wine", &settings.starsonatastartup.ss_path])
         .spawn()
         .expect("Unable to start exe");
 
