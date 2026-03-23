@@ -74,7 +74,7 @@ fn ss_start(settings: Rc<AppConfig>) -> (Child, Option<String>) {
     let output = Command::new("xdotool")
         .args(["search", "--name", ".*Star Sonata.*"])
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to search for Star Sonata window.");
     let window = String::from_utf8_lossy(&output.stdout).trim_end().to_string();
@@ -126,7 +126,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
         .args(["search", "--name", ".*Star Sonata.*"])
         // .env("DISPLAY", ":0.0")
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to search for Star Sonata window.");
     let window = String::from_utf8_lossy(&output.stdout).trim_end().to_string();
@@ -137,7 +137,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
         .args(["windowfocus", "--sync", &window])
         // .env("DISPLAY", ":0.0")
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to focus on window");
     tracing::debug!("Focus window output: {:?}", out);
@@ -147,7 +147,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
         .args(["key", "--window", &window, "ctrl+a"])
         // .env("DISPLAY", ":0.0")
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to select username");
     tracing::debug!("Select username output: {:?}", out);
@@ -156,7 +156,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
         .args(["key", "--window", &window, "Delete"])
         // .env("DISPLAY", ":0.0")
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to delete username");
     tracing::debug!("Delete username output: {:?}", out);
@@ -166,7 +166,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
         .args(["type", "--window", &window, &settings.username])
         // .env("DISPLAY", ":0.0")
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to type username");
     tracing::debug!("Typing username output: {:?}", out);
@@ -176,7 +176,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
         .args(["key", "--window", &window, "0xff09"])
         // .env("DISPLAY", ":0.0")
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to tab to password");
     tracing::debug!("Tab to password output: {:?}", out);
@@ -185,7 +185,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
         .args(["key", "--window", &window, "ctrl+a"])
         // .env("DISPLAY", ":0.0")
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to select password");
     tracing::debug!("Select password output: {:?}", out);
@@ -194,7 +194,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
         .args(["key", "--window", &window, "Delete"])
         // .env("DISPLAY", ":0.0")
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to delete password");
     tracing::debug!("Delete password output: {:?}", out);
@@ -203,7 +203,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
         .args(["type", "--window", &window, settings.password.expose_secret()])
         // .env("DISPLAY", ":0.0")
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to type password");
     tracing::debug!("Type password output: {:?}", out);
@@ -212,7 +212,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
         .args(["key", "--window", &window, "Return"])
         // .env("DISPLAY", ":0.0")
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to enter user credentials");
     tracing::debug!("Enter credentials output: {:?}", out);
@@ -226,7 +226,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
         .args(["search", "--name", ".*Star Sonata.*"])
         // .env("DISPLAY", ":0.0")
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to search for Star Sonata window.");
     println!("{:?}", &output.stdout);
@@ -237,7 +237,7 @@ fn ss_login(settings: Rc<AppConfig>, window: Option<String>) {
         .args(["key", "--window", &window, "Return"])
         // .env("DISPLAY", ":0.0")
         .env("DISPLAY", ":99.0")
-        .env("XAUTHORITY", "~/.xauth")
+        .env("XAUTHORITY", "/home/ubuntu/.xauth")
         .output()
         .expect("Unable to select character");
     tracing::debug!("Character select output: {:?}", out);
