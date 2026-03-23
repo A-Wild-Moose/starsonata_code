@@ -180,6 +180,16 @@ fn ss_login(_: Rc<RefCell<Enigo>>, settings: Rc<AppConfig>, window: Option<Strin
     // wait for the characters to load
     tracing::info!("Waiting for character screen to load");
     thread::sleep(time::Duration::from_millis(settings.starsonatastartup.character_load_sleep));
+
+    // first search for the star sonata window
+    let output = Command::new("xdotool")
+        .args(["search", "--name", ".*Star Sonata.*"])
+        .env("DISPLAY", ":0.0")
+        .output()
+        .expect("Unable to search for Star Sonata window.");
+    println!("{:?}", &output.stdout);
+    let window2 = String::from_utf8_lossy(&output.stdout).trim_end().to_string();
+    tracing::info!("Found window id: {:?} for Star Sonata.", window2);
     
     let out = Command::new("xdotool")
         .args(["key", "--window", &window, "Return"])
