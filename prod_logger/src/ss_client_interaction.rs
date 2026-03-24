@@ -74,7 +74,7 @@ pub fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
 
 #[cfg(target_os = "linux")]
 #[tracing::instrument(skip(settings))]
-pub fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
+pub fn starsonata_start(settings: Arc<AppConfig>) -> (Box<dyn ChildWrapper>, Option<String>) {
     // let handle = Command::new("xvfb-run")
     //     .args(["-f", "/home/ubuntu/.xauth", "-n", "99", "wine", &settings.starsonata_startup.ss_path])
     //     .spawn()
