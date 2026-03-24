@@ -134,7 +134,7 @@ impl StationMonitor {
 #[instrument(skip(tx, cancel_token))]
 pub fn listen_for_prod(tx: Sender<String>, cancel_token: CancellationToken) {
     info!("Getting capture device...");
-    let mut cap = get_pcap_capture();
+    let mut cap = get_pcap_capture().unwrap();
 
     static STATION_MONITOR: LazyLock<StationMonitor> = LazyLock::new(|| StationMonitor::new());
 
