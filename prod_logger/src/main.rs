@@ -68,7 +68,7 @@ async fn send_prod_logs_to_discord(mut rx: Receiver<String>, channel_id: serenit
 #[poise::command(slash_command)]
 async fn shutdown(
     ctx: Context<'_>,
-    #[description = "Shutdown the bot. Any value entered here will indicate to include the bot in the shutdown."] shutdown_bot: Option<bool>
+    #[description = "Shutdown the bot."] shutdown_bot: Option<bool>
 ) -> Result<(), Error> {
     // let the user know we are shutting down bot
     ctx.send(poise::CreateReply::default()

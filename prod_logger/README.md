@@ -22,3 +22,9 @@ DISPLAY=:0.0 wine starsonata2_installer.exe
 ```
 
 Cygwin/Xserver for SSH with x11 forwarding to windows
+
+
+Solution for handling no permissions on socket capturing
+```bash
+sudo setcap cap_net_raw,cap_net_admin=eip /path/to/your/binary
+```

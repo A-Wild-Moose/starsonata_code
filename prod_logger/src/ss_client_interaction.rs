@@ -5,6 +5,8 @@ use std::{thread, time::Duration};
 use secrecy::ExposeSecret;
 use tracing::{instrument, info, warn, debug};
 
+use process_wrap::std::*;
+
 #[cfg(not(target_os = "linux"))]
 use enigo::{Key, Keyboard, Enigo, Settings, Direction::{Click, Press, Release}};
 
@@ -73,8 +75,12 @@ pub fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
 #[cfg(target_os = "linux")]
 #[tracing::instrument(skip(settings))]
 pub fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
-    let handle = Command::new("xvfb-run")
-        .args(["-f", "/home/ubuntu/.xauth", "-n", "99", "wine", &settings.starsonata_startup.ss_path])
+    // let handle = Command::new("xvfb-run")
+    //     .args(["-f", "/home/ubuntu/.xauth", "-n", "99", "wine", &settings.starsonata_startup.ss_path])
+    //     .spawn()
+    //     .expect("Unable to start Star Sonata exe");
+    let handle = CommandWrap::with_new("xvfb-run", |command| {command.args(["-f", "/home/ubuntu/.xauth", "-n", "99", "wine", &settings.starsonata_startup.ss_path]);})
+        .wrap(ProcessGroup::leader())
         .spawn()
         .expect("Unable to start Star Sonata exe");
     
