@@ -1,10 +1,11 @@
 use serde::Deserialize;
 use secrecy::SecretBox;
-use poise::serenity_prelude::ChannelId;
+use poise::serenity_prelude::{GuildId, ChannelId};
 
 #[derive(Deserialize, Debug)]
 pub struct DiscordConfig {
     pub bot_token: String,
+    pub guild_id: GuildId,
     pub prod_log_channel_id: ChannelId,
 }
 #[derive(Deserialize, Debug)]

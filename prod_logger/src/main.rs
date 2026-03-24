@@ -65,7 +65,7 @@ async fn send_prod_logs_to_discord(mut rx: Receiver<String>, channel_id: serenit
 
 /// Shuts down any running Star Sonata client, data capture, and prod logging, and then the bot itself.
 #[instrument(skip(ctx))]
-#[poise::command(slash_command)]
+#[poise::command(slash_command, default_member_permissions="MANAGE_GUILD")]
 async fn shutdown(
     ctx: Context<'_>,
     #[description = "Shutdown the bot."] shutdown_bot: Option<bool>
@@ -108,7 +108,7 @@ async fn shutdown(
 
 /// Starts the Star Sonata client and logs in
 #[instrument(skip(ctx))]
-#[poise::command(slash_command)]
+#[poise::command(slash_command, default_member_permissions="MANAGE_GUILD")]
 async fn start_starsonata(ctx: Context<'_>) -> Result<(), Error> {
     // check that we dont already have a Star Sonata client running
     let reply = match *ctx.data().ss_handle.lock().unwrap() {
@@ -166,7 +166,7 @@ async fn start_starsonata(ctx: Context<'_>) -> Result<(), Error> {
 /// Starts capturing of SS data and logging station messages to discord.
 /// Run after /start_starsonata
 #[instrument(skip(ctx))]
-#[poise::command(slash_command)]
+#[poise::command(slash_command, default_member_permissions="MANAGE_GUILD")]
 async fn start_capturing_and_logging(ctx: Context<'_>) -> Result<(), Error> {
     // create the channel for prod log communication
     let (tx, rx) = mpsc::channel(128);
@@ -229,6 +229,7 @@ async fn main() {
 
     // need a clone before it gets moved into the closure
     let cl_settings = settings.clone();
+    let cl_guildid = settings.discord.guild_id.clone();
 
     // Create the shutdown notification system
     let shutdown_token = CancellationToken::new();
@@ -244,7 +245,7 @@ async fn main() {
         })
         .setup(move |ctx, _ready, framework| {
             Box::pin(async move {
-                poise::builtins::register_in_guild(ctx, &framework.options().commands, serenity::GuildId::new(1409517559321071790)).await?;
+                poise::builtins::register_in_guild(ctx, &framework.options().commands, cl_guildid).await?;
                 Ok(Data {
                     settings: cl_settings,
                     ss_handle: Mutex::new(None),
