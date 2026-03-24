@@ -22,7 +22,7 @@ use prod_logger::config::AppConfig;
 // User data, which is stored and accessible in all command invocations
 struct Data {
     settings: Arc<AppConfig>,
-    ss_handle: Mutex<Option<std::process::Child>>,
+    ss_handle: Mutex<Option<Box<dyn process_wrap::std::ChildWrapper>>>,
     ss_window_id: Mutex<Option<String>>,
     shutdown_token: CancellationToken,
     bot_shutdown_token: CancellationToken,

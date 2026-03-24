@@ -53,10 +53,14 @@ pub fn get_sleep_time(settings: Arc<AppConfig>) -> u64 {
 
 #[cfg(not(target_os = "linux"))]
 #[instrument(skip(settings))]
-pub fn starsonata_start(settings: Arc<AppConfig>) -> (Child, Option<String>) {
-    let handle = Command::new(&settings.starsonata_startup.ss_path)
+pub fn starsonata_start(settings: Arc<AppConfig>) -> (Box<dyn ChildWrapper>, Option<String>) {
+    // let handle = Command::new(&settings.starsonata_startup.ss_path)
+    //     .spawn()
+    //     .expect("Unable to start Star Sonata exe");
+    let handle = CommandWrap::with_new(&settings.starsonata_startup.ss_path, |_| {})
+        .wrap(JobObject)
         .spawn()
-        .expect("Unable to start Star Sonata exe");
+        .expect("Unable to start Star Sonata exe.");
     
     info!("Started exe, waiting {}s for client to get to initial options screen.", settings.starsonata_startup.initial_sleep / 1000);
     thread::sleep(Duration::from_millis(settings.starsonata_startup.initial_sleep));
