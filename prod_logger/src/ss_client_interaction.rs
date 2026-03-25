@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::process::{Command, Child};
+use std::process::{Command, Child, Stdio};
 use std::{thread, time::Duration};
 
 use secrecy::ExposeSecret;
@@ -85,6 +85,7 @@ pub fn starsonata_start(settings: Arc<AppConfig>) -> (Box<dyn ChildWrapper>, Opt
     //     .expect("Unable to start Star Sonata exe");
     let handle = CommandWrap::with_new("xvfb-run", |command| {command.args(["-f", "/home/ubuntu/.xauth", "-n", "99", "wine", &settings.starsonata_startup.ss_path]);})
         .wrap(ProcessGroup::leader())
+        .stdout(Stdio::null())
         .spawn()
         .expect("Unable to start Star Sonata exe");
     
