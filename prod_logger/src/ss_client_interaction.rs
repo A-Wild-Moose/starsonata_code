@@ -83,9 +83,12 @@ pub fn starsonata_start(settings: Arc<AppConfig>) -> (Box<dyn ChildWrapper>, Opt
     //     .args(["-f", "/home/ubuntu/.xauth", "-n", "99", "wine", &settings.starsonata_startup.ss_path])
     //     .spawn()
     //     .expect("Unable to start Star Sonata exe");
-    let handle = CommandWrap::with_new("xvfb-run", |command| {command.args(["-f", "/home/ubuntu/.xauth", "-n", "99", "wine", &settings.starsonata_startup.ss_path]);})
+    let handle = CommandWrap::with_new("xvfb-run", |command| {
+            command
+                .args(["-f", "/home/ubuntu/.xauth", "-n", "99", "wine", &settings.starsonata_startup.ss_path])
+                .stdout(Stdio::null());
+        })
         .wrap(ProcessGroup::leader())
-        .stdout(Stdio::null())
         .spawn()
         .expect("Unable to start Star Sonata exe");
     
