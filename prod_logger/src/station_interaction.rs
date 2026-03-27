@@ -3,9 +3,25 @@ use std::sync::{Arc, Mutex, LazyLock};
 use regex::{Regex, RegexSet};
 use tokio::sync::mpsc::Sender;
 use tokio_util::sync::CancellationToken;
-use tracing::{instrument, info};
+use tracing::{instrument, info, warn};
 
 use super::device::get_pcap_capture;
+
+
+// macro for extrating information from a capture.  Used so that we dont panic using the .extract method.
+macro_rules! extract_capture {
+    ($cap:expr, [$($x:expr),*]) => {
+        {
+            [$(
+                match $cap.name($x) {
+                    Some(a) => a.as_str().to_string(),
+                    None => "NONE".to_string()
+                }
+            ),*]
+        }
+    }
+}
+
 
 // define some macros so that all our colors stay constant
 macro_rules! player {
@@ -69,7 +85,7 @@ impl StationMonitor {
     fn get_match_capture(&self, a: &str, tx: Sender<String>) {
         // also handles credits
         for cap in self.transfer.captures_iter(a) {
-            let (_, [player, quant, item, dir]) = cap.extract();
+            let [player, quant, item, dir] = extract_capture!(cap, ["player", "quant", "item", "dir"]);
             let line = format!(
                 "{} transferred {} {} {} base",
                 player!(player),
@@ -78,44 +94,44 @@ impl StationMonitor {
                 dir,
             );
             if let Err(why) = tx.blocking_send(line) {
-                println!("Unable to transmit captured line: {:?}", why);
+                warn!("Unable to transmit captured line: {:?}", why);
             }
         }
         for cap in self.use_bp.captures_iter(a) {
-            let (_, [player, item]) = cap.extract();
+            let [player, item] = extract_capture!(cap, ["player", "item"]);
             let line = format!(
                 "{} using {} Blueprint",
                 player!(player),
                 item!(item),
             );
             if let Err(why) = tx.blocking_send(line) {
-                println!("Unable to transmit captured line: {:?}", why);
+                warn!("Unable to transmit captured line: {:?}", why);
             }
         }
         for cap in self.construct.captures_iter(a) {
-            let (_, [player, item]) = cap.extract();
+            let [player, item] = extract_capture!(cap, ["player", "item"]);
             let line = format!(
                 "{} constructing {}",
                 player!(player),
                 item!(item),
             );
             if let Err(why) = tx.blocking_send(line) {
-                println!("Unable to transmit captured line: {:?}", why);
+                warn!("Unable to transmit captured line: {:?}", why);
             }
         }
         for cap in self.construct_done.captures_iter(a) {
-            let (_, [quant, item]) = cap.extract();
+            let [quant, item] = extract_capture!(cap, ["quant", "item"]);
             let line = format!(
                 "Construction finished on {} {}",
                 quant!(quant),
                 item!(item),
             );
             if let Err(why) = tx.blocking_send(line) {
-                println!("Unable to transmit captured line: {:?}", why);
+                warn!("Unable to transmit captured line: {:?}", why);
             }
         }
         for cap in self.equip.captures_iter(a) {
-            let (_, [player, dir, quant, item]) = cap.extract();
+            let [player, dir, quant, item] = extract_capture!(cap, ["player", "dir", "quant", "item"]);
             let line = format!(
                 "{} {} {} {}",
                 player!(player),
@@ -124,7 +140,7 @@ impl StationMonitor {
                 item!(item),
             );
             if let Err(why) = tx.blocking_send(line) {
-                println!("Unable to transmit captured line: {:?}", why);
+                warn!("Unable to transmit captured line: {:?}", why);
             }
         }
     }
