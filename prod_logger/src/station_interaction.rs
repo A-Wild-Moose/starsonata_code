@@ -177,7 +177,6 @@ pub fn listen_for_prod(tx: Sender<String>, cancel_notify: Arc<Notify>) {
                 },
                 Err(_) => continue,
             }
-            debug!("packet");
         }
     });
 
