@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::process::{Command, Child};
+use std::process::{Command, Child, Stdio};
 
 use secrecy::ExposeSecret;
 use tracing::{instrument, info};
