@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::process::{Command, Child, Stdio};
 
 use secrecy::ExposeSecret;
-use tracing::{instrument, info};
+use tracing::{instrument, info, debug};
 use tokio::time::{sleep, Duration};
 use process_wrap::std::*;
 
