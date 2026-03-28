@@ -1,9 +1,7 @@
 use std::sync::Arc;
-use std::process::{Command, Child, Stdio};
-// use std::{thread, time::Duration};
 
 use secrecy::ExposeSecret;
-use tracing::{instrument, info, warn, debug};
+use tracing::{instrument, info};
 use tokio::time::{sleep, Duration};
 use process_wrap::std::*;
 
@@ -53,7 +51,7 @@ pub fn get_sleep_time(settings: Arc<AppConfig>) -> u64 {
 
 #[cfg(not(target_os = "linux"))]
 #[instrument(skip(settings))]
-pub fn starsonata_start(settings: Arc<AppConfig>) -> (Box<dyn ChildWrapper>, Option<String>) {
+pub async fn starsonata_start(settings: Arc<AppConfig>) -> (Box<dyn ChildWrapper>, Option<String>) {
     // let handle = Command::new(&settings.starsonata_startup.ss_path)
     //     .spawn()
     //     .expect("Unable to start Star Sonata exe");
@@ -78,7 +76,7 @@ pub fn starsonata_start(settings: Arc<AppConfig>) -> (Box<dyn ChildWrapper>, Opt
 
 #[cfg(target_os = "linux")]
 #[tracing::instrument(skip(settings))]
-pub fn starsonata_start(settings: Arc<AppConfig>) -> (Box<dyn ChildWrapper>, Option<String>) {
+pub async fn starsonata_start(settings: Arc<AppConfig>) -> (Box<dyn ChildWrapper>, Option<String>) {
     // let handle = Command::new("xvfb-run")
     //     .args(["-f", "/home/ubuntu/.xauth", "-n", "99", "wine", &settings.starsonata_startup.ss_path])
     //     .spawn()
@@ -109,7 +107,7 @@ pub fn starsonata_start(settings: Arc<AppConfig>) -> (Box<dyn ChildWrapper>, Opt
 
 #[cfg(not(target_os = "linux"))]
 #[instrument(skip(settings))]
-pub fn starsonata_login(settings: Arc<AppConfig>, _: Option<String>) {
+pub async fn starsonata_login(settings: Arc<AppConfig>, _: Option<String>) {
     let mut enigo = Enigo::new(&Settings::default()).expect("Unable to setup enigo");
     
     // should be on the login screen here with cursor selecting the username field
@@ -143,7 +141,7 @@ pub fn starsonata_login(settings: Arc<AppConfig>, _: Option<String>) {
 
 #[cfg(target_os = "linux")]
 #[tracing::instrument(skip(settings))]
-pub fn starsonata_login(settings: Arc<AppConfig>, window: Option<String>) {
+pub async fn starsonata_login(settings: Arc<AppConfig>, window: Option<String>) {
     let window = window.expect("Window ID was not set");
 
     // Should be on the first login screen here. Cursor should be selecting the username field

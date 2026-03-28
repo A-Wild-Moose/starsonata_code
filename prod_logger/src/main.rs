@@ -2,15 +2,14 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use tracing::{info, warn, instrument};
+use tracing::{info, instrument};
 use tracing_subscriber::{EnvFilter, filter::LevelFilter};
 
 use config::Config;
 
 use tokio::signal;
 use tokio::time::timeout;
-use tokio::sync::{mpsc, mpsc::{Sender, Receiver}};
-use tokio_util::sync::CancellationToken;
+use tokio::sync::{mpsc, mpsc::Receiver, Notify};
 
 use poise::serenity_prelude as serenity; 
 
@@ -24,8 +23,8 @@ struct Data {
     settings: Arc<AppConfig>,
     ss_handle: Mutex<Option<Box<dyn process_wrap::std::ChildWrapper>>>,
     ss_window_id: Mutex<Option<String>>,
-    shutdown_token: CancellationToken,
-    bot_shutdown_token: CancellationToken,
+    shutdown_notify: Arc<Notify>,
+    bot_shutdown_notify: Arc<Notify>,
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -33,13 +32,20 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 
 
 
-async fn send_prod_logs_to_discord(mut rx: Receiver<String>, channel_id: serenity::ChannelId, http: Arc<serenity::Http>, shutdown_token: CancellationToken) {
+async fn send_prod_logs_to_discord(mut rx: Receiver<String>, channel_id: serenity::ChannelId, http: Arc<serenity::Http>, shutdown_notify: Arc<Notify>) {
     // initialize a new message builder
     let mut mb = serenity::MessageBuilder::new();
     let mut i = 0; // count of messages
+    let running = Arc::new(Mutex::new(true));
+    let r_clone = running.clone();
+
+    tokio::spawn(async move {
+        shutdown_notify.notified().await;
+        *r_clone.lock().expect("Unable to acquire lock") = false;
+    });
 
     // loop while we aren't cancelled
-    while !shutdown_token.is_cancelled() {
+    while *running.lock().expect("Unable to acquire lock") {
         let _ = timeout(Duration::from_millis(10000), (async || {
             // want to only wait for 10 messages before sending
             while i < 10 {
@@ -88,7 +94,7 @@ async fn shutdown(
 
     // send cancellation token to the monitoring tasks
     info!("Sending cancellation tokens to monitoring tasks.");
-    ctx.data().shutdown_token.cancel();
+    ctx.data().shutdown_notify.notify_waiters();
 
     // check if we are shutting bot down
     match shutdown_bot {
@@ -98,7 +104,7 @@ async fn shutdown(
                 .content("Shutting down bot as well.")
                 .ephemeral(true)
             ).await.unwrap();
-            ctx.data().bot_shutdown_token.cancel();
+            ctx.data().bot_shutdown_notify.notify_waiters();
         }
         _ => {}
     }
@@ -143,7 +149,7 @@ async fn start_starsonata(ctx: Context<'_>) -> Result<(), Error> {
     // split so that we dont hold the lock for the entire wait time to startup the client
     // and avoid poisoning if the startup fails
     // TODO pass errors up so that we can handle them here
-    let (ss_handle, window_id) = starsonata_start(ctx.data().settings.clone());
+    let (ss_handle, window_id) = starsonata_start(ctx.data().settings.clone()).await;
     {
         let mut handle = ctx.data().ss_handle.lock().unwrap();
         let mut window = ctx.data().ss_window_id.lock().unwrap();
@@ -152,7 +158,7 @@ async fn start_starsonata(ctx: Context<'_>) -> Result<(), Error> {
     }
 
     // handle the login
-    starsonata_login(ctx.data().settings.clone(), window_id);
+    starsonata_login(ctx.data().settings.clone(), window_id).await;
     // update the message
     msg_handle.edit(ctx, poise::CreateReply::default()
         .content("Star Sonata client should have started.\nLogging in...")
@@ -174,23 +180,23 @@ async fn start_capturing_and_logging(ctx: Context<'_>) -> Result<(), Error> {
     // clone the data we need so it can be moved as appropriate
     let channel = ctx.data().settings.discord.prod_log_channel_id.clone();
     let http = ctx.serenity_context().http.clone();
-    let c_token1 = ctx.data().shutdown_token.clone();
-    let c_token2 = ctx.data().shutdown_token.clone();
+    let c_notify1 = ctx.data().shutdown_notify.clone();
+    let c_notify2 = ctx.data().shutdown_notify.clone();
 
     // going to use tokio spawn to handle the messages to discord, as it should be able to run on the 
     // same thread as the discord bot and not cause issues
-    let send_logs_handle = tokio::spawn(async move {
+    let _send_logs_handle = tokio::spawn(async move {
         send_prod_logs_to_discord(
             rx,
             channel,
             http,
-            c_token1,
+            c_notify1,
         ).await
     });
 
     info!("Spawning thread with to capture data.");
-    let prod_watch_handle = thread::spawn(|| {
-        listen_for_prod(tx, c_token2);
+    let _prod_watch_handle = thread::spawn(|| {
+        listen_for_prod(tx, c_notify2);
     });
     
     // React/reply to the command invocation
@@ -232,10 +238,10 @@ async fn main() {
     let cl_guildid = settings.discord.guild_id.clone();
 
     // Create the shutdown notification system
-    let shutdown_token = CancellationToken::new();
-    let shutdown_clone = shutdown_token.clone();
-    let bot_shutdown_token = CancellationToken::new();
-    let bot_shutdown_clone = bot_shutdown_token.clone();
+    let shutdown_notify = Arc::new(Notify::new());
+    let shutdown_clone = shutdown_notify.clone();
+    let bot_shutdown_notify = Arc::new(Notify::new());
+    let bot_shutdown_clone = bot_shutdown_notify.clone();
 
     let framework = poise::Framework::builder()
         .options(
@@ -250,8 +256,8 @@ async fn main() {
                     settings: cl_settings,
                     ss_handle: Mutex::new(None),
                     ss_window_id: Mutex::new(None),
-                    shutdown_token: shutdown_clone,
-                    bot_shutdown_token: bot_shutdown_clone,
+                    shutdown_notify: shutdown_clone,
+                    bot_shutdown_notify: bot_shutdown_clone,
                 })
             })
         })
@@ -269,12 +275,12 @@ async fn main() {
     // Shutdown handler for ctrl-c
     tokio::spawn(async move {
         tokio::select! {
-            _ = bot_shutdown_token.cancelled() => {
-                shutdown_token.cancel();
+            _ = bot_shutdown_notify.notified() => {
+                shutdown_notify.notify_waiters();
                 shard_manager1.shutdown_all().await;
             },
             _ = signal::ctrl_c() => {
-                shutdown_token.cancel();
+                shutdown_notify.notify_waiters();
                 shard_manager1.shutdown_all().await;
             }
         };
