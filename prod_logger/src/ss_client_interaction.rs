@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use std::process::{Command, Child, Stdio};
-use std::{thread, time::Duration};
+// use std::{thread, time::Duration};
 
 use secrecy::ExposeSecret;
 use tracing::{instrument, info, warn, debug};
-
+use tokio::time::{sleep, Duration};
 use process_wrap::std::*;
 
 #[cfg(not(target_os = "linux"))]
@@ -63,14 +63,14 @@ pub fn starsonata_start(settings: Arc<AppConfig>) -> (Box<dyn ChildWrapper>, Opt
         .expect("Unable to start Star Sonata exe.");
     
     info!("Started exe, waiting {}s for client to get to initial options screen.", settings.starsonata_startup.initial_sleep / 1000);
-    thread::sleep(Duration::from_millis(settings.starsonata_startup.initial_sleep));
+    sleep(Duration::from_millis(settings.starsonata_startup.initial_sleep)).await;
     info!("Waited {}s, client should be on initial options screen.", settings.starsonata_startup.initial_sleep / 1000);
 
     let mut enigo = Enigo::new(&Settings::default()).expect("Unable to setup enigo");
     enigo.key(Key::Return, Click).expect("Unable to press Return");
     info!("Pressed Return, loading main client.");
 
-    thread::sleep(Duration::from_millis(settings.starsonata_startup.client_load_sleep));
+    sleep(Duration::from_millis(settings.starsonata_startup.client_load_sleep)).await;
     info!("Waited {}s for the client to load, moving to login.", settings.starsonata_startup.client_load_sleep / 1000);
 
     return (handle, None);
@@ -93,7 +93,7 @@ pub fn starsonata_start(settings: Arc<AppConfig>) -> (Box<dyn ChildWrapper>, Opt
         .expect("Unable to start Star Sonata exe");
     
     info!("Started exe, waiting {}s for the client to load", settings.starsonata_startup.client_load_sleep / 1000);
-    thread::sleep(Duration::from_millis(settings.starsonata_startup.client_load_sleep));
+    sleep(Duration::from_millis(settings.starsonata_startup.client_load_sleep)).await;
 
     // first search for the StarSonata window
     let output = xdotool!(["search", "--name", "Star Sonata$"], "Unable to search for the Star Sonata window.");
@@ -134,7 +134,7 @@ pub fn starsonata_login(settings: Arc<AppConfig>, _: Option<String>) {
     enigo.key(Key::Return, Click).unwrap();
 
     info!("Waiting {}s for character screen to load.", settings.starsonata_startup.character_load_sleep / 1000);
-    thread::sleep(Duration::from_millis(settings.starsonata_startup.character_load_sleep));
+    sleep(Duration::from_millis(settings.starsonata_startup.character_load_sleep)).await;
 
     info!("Selecting the first character via Return key.");
     enigo.key(Key::Return, Click).unwrap();
@@ -176,7 +176,7 @@ pub fn starsonata_login(settings: Arc<AppConfig>, window: Option<String>) {
 
     // wait for the character screen to load
     info!("Waiting {}s for character screen to load", settings.starsonata_startup.character_load_sleep / 1000);
-    thread::sleep(Duration::from_millis(settings.starsonata_startup.character_load_sleep));
+    sleep(Duration::from_millis(settings.starsonata_startup.character_load_sleep)).await;
 
     info!("Selecting first character through pressing Return.");
     let out = xdotool!(["key", "--window", &window, "Return"], "Unable to press return to select character");
