@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex, LazyLock};
 
 use regex::{Regex, RegexSet};
 use tokio::sync::{mpsc::Sender, Notify};
-use tracing::{instrument, info, warn};
+use tracing::{instrument, info, warn, debugs};
 
 use super::device::get_pcap_capture;
 
@@ -153,23 +153,33 @@ pub fn listen_for_prod(tx: Sender<String>, cancel_notify: Arc<Notify>) {
     let running = Arc::new(Mutex::new(true));
     let r_clone = running.clone();
 
-    tokio::spawn(async move {
-        cancel_notify.notified().await;
-        *r_clone.lock().expect("Unable to acquire lock") = false;
+    // setup a runtime since this is sync function
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .expect("Unable to build current thread runtime");
+
+    rt.block_on(async {
+        tokio::spawn(async move {
+            cancel_notify.notified().await;
+            *r_clone.lock().expect("Unable to acquire lock") = false;
+        });
+
+        static STATION_MONITOR: LazyLock<StationMonitor> = LazyLock::new(|| StationMonitor::new());
+
+        while *running.lock().expect("Unable to acquire `running` lock.") {
+            match cap.next_packet() {
+                Ok(packet) => {
+                    let data = String::from_utf8_lossy(packet.data);
+
+                    if STATION_MONITOR.re_set.is_match(&data) {
+                        STATION_MONITOR.get_match_capture(&data, tx.clone());
+                    }
+                },
+                Err(_) => continue,
+            }
+            debug!("packet");
+        }
     });
 
-    static STATION_MONITOR: LazyLock<StationMonitor> = LazyLock::new(|| StationMonitor::new());
-
-    while *running.lock().expect("Unable to acquire `running` lock.") {
-        match cap.next_packet() {
-            Ok(packet) => {
-                let data = String::from_utf8_lossy(packet.data);
-
-                if STATION_MONITOR.re_set.is_match(&data) {
-                    STATION_MONITOR.get_match_capture(&data, tx.clone());
-                }
-            },
-            Err(_) => continue,
-        }
-    }
+    
 }
