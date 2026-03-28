@@ -51,7 +51,7 @@ async fn send_prod_logs_to_discord(mut rx: Receiver<String>, channel_id: serenit
             while i < 10 {
                 i = i + 1;
                 if let Some(line) = rx.recv().await {
-                    mb.push_codeblock_safe(line, Some("ansi"));
+                    mb.push_codeblock_safe(line.clone(), Some("ansi"));
                 }
             }
         })()).await;

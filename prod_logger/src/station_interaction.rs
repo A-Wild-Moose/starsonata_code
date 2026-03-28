@@ -81,7 +81,7 @@ impl StationMonitor {
         }
     }
 
-    fn get_match_capture(&self, a: &str, tx: Sender<String>) {
+    async fn get_match_capture(&self, a: &str, tx: Sender<String>) {
         // also handles credits
         for cap in self.transfer.captures_iter(a) {
             let [player, quant, item, dir] = extract_capture!(cap, ["player", "quant", "item", "dir"]);
@@ -92,8 +92,9 @@ impl StationMonitor {
                 item!(item),
                 dir,
             );
-            if let Err(why) = tx.blocking_send(line) {
-                warn!("Unable to transmit captured line: {:?}", why);
+            match tx.send(line.clone()).await {
+                Err(why) => warn!("Unable to transmit captured line: {:?}", why),
+                _ => {}
             }
         }
         for cap in self.use_bp.captures_iter(a) {
@@ -103,7 +104,7 @@ impl StationMonitor {
                 player!(player),
                 item!(item),
             );
-            if let Err(why) = tx.blocking_send(line) {
+            if let Err(why) = tx.send(line).await {
                 warn!("Unable to transmit captured line: {:?}", why);
             }
         }
@@ -114,7 +115,7 @@ impl StationMonitor {
                 player!(player),
                 item!(item),
             );
-            if let Err(why) = tx.blocking_send(line) {
+            if let Err(why) = tx.send(line).await {
                 warn!("Unable to transmit captured line: {:?}", why);
             }
         }
@@ -125,7 +126,7 @@ impl StationMonitor {
                 quant!(quant),
                 item!(item),
             );
-            if let Err(why) = tx.blocking_send(line) {
+            if let Err(why) = tx.send(line).await {
                 warn!("Unable to transmit captured line: {:?}", why);
             }
         }
@@ -138,7 +139,7 @@ impl StationMonitor {
                 quant!(quant),
                 item!(item),
             );
-            if let Err(why) = tx.blocking_send(line) {
+            if let Err(why) = tx.send(line).await {
                 warn!("Unable to transmit captured line: {:?}", why);
             }
         }
@@ -172,7 +173,7 @@ pub fn listen_for_prod(tx: Sender<String>, cancel_notify: Arc<Notify>) {
                     let data = String::from_utf8_lossy(packet.data);
 
                     if STATION_MONITOR.re_set.is_match(&data) {
-                        STATION_MONITOR.get_match_capture(&data, tx.clone());
+                        STATION_MONITOR.get_match_capture(&data, tx.clone()).await;
                     }
                 },
                 Err(_) => continue,
