@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex, LazyLock};
 
 use regex::{Regex, RegexSet};
 use tokio::sync::{mpsc::Sender, Notify};
-use tracing::{instrument, info, warn, debugs};
+use tracing::{instrument, info, warn, debug};
 
 use super::device::get_pcap_capture;
 
