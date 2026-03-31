@@ -195,8 +195,10 @@ async fn start_capturing_and_logging(ctx: Context<'_>) -> Result<(), Error> {
     });
 
     info!("Spawning thread with to capture data.");
-    let _prod_watch_handle = thread::spawn(|| {
-        listen_for_prod(tx, c_notify2);
+    let _prod_watch_handle = thread::Builder::new()
+        .name("StarSonata Prod Watch".to_string())
+        .spawn(|| {
+            listen_for_prod(tx, c_notify2);
     });
     
     // React/reply to the command invocation
