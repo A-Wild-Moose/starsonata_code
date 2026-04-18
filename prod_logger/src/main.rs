@@ -78,7 +78,7 @@ async fn shutdown(
 ) -> Result<(), Error> {
     // let the user know we are shutting down bot
     ctx.send(poise::CreateReply::default()
-        .content("Recieved shutdown command, shutting monitoring and Star Sonata processes down.")
+        .content("Received shutdown command, shutting monitoring and Star Sonata processes down.")
         .ephemeral(true)
     ).await.unwrap();
 
@@ -203,7 +203,7 @@ async fn start_capturing_and_logging(ctx: Context<'_>) -> Result<(), Error> {
     
     // React/reply to the command invocation
     ctx.send(poise::CreateReply::default()
-        .content("Spun up the communcation with discord, and listening for star sonata data from the prod.")
+        .content("Spun up the communication with discord, and listening for star sonata data from the prod.")
         .ephemeral(true)
     ).await.unwrap();
 
