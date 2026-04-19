@@ -1,4 +1,7 @@
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::fs::File;
+use std::io::{BufWriter, Write};
+
 use regex::Regex;
 use once_cell::sync::Lazy;
 use colored::Colorize;
@@ -119,15 +122,19 @@ fn main() {
     let mut cap = get_pcap_capture();
 
     static RE_MC: Lazy<Regex> = Lazy::new(|| Regex::new(
-        r"\x10\x09(?<item>[[:word:] '-]*)[\r\n]{2}   Average(?ms:.*?)Most profitable"
+        r"\x10\x09\[\[(?<item>[[:word:] '-]*)\]\][\r\n]{2}   Average(?ms:.*?)Most profitable"
     ).unwrap());
 
-    // [ 0]  12.17b (   1): Free Market: Cult of Labrador
+    // [ 0]   2.00b (  14): @["Free Market" :148242573 (Cheaps)]
     static RE_SHOPS: Lazy<Regex> = Lazy::new(|| Regex::new(
-        r"  \[..\][ ]*(?<price>[\d\.]*[tbm]?) \(.*\): .*: (?<shop>.*)[\r\n]"
+        r#"  \[..\][ ]*(?<price>[\d\.]*[tbm]?) \(.{4}\): @\[".*" :\d* \((?<shop>[[:word:] ]*)\)\][\r\n]"#
     ).unwrap());
 
     let mut lines: Vec<String> = Vec::with_capacity(50);
+
+
+    // let file = File::create("raw/raw.txt").unwrap();
+    // let mut wrt = BufWriter::new(&file);
 
 
     while running.load(Ordering::SeqCst) {
@@ -135,6 +142,9 @@ fn main() {
             continue;
         };
         let data = String::from_utf8_lossy(packet.data);
+
+
+        // wrt.write(&packet.data).unwrap();
 
         for cmatch in RE_MC.find_iter(&data) {
             let mc_data = cmatch.as_str();
