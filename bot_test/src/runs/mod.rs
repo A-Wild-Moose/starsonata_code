@@ -5,7 +5,7 @@ use poise::serenity_prelude as serenity;
 
 mod time;
 
-use crate::{Context};
+use crate::{Context, Data};
 
 
 trait JoinSetExt {
@@ -223,46 +223,6 @@ impl RunInfo {
         }
     }
 
-    pub async fn handle_edit_modal(&self, ctx: Context<'_>) {
-        let mut msg = self.msg.lock().unwrap().clone().unwrap();
-        let orig_name = self.name.lock().unwrap().clone();
-        let orig_size = self.squad_size.lock().unwrap().clone();
-        let orig_time = self.time.lock().unwrap().clone();
-        
-        while let Some(mci) = serenity::ComponentInteractionCollector::new(ctx)
-            .message_id(msg.id)
-            .custom_ids(vec!["edit_modal".to_string()])
-            .await
-        {
-            let data = poise::execute_modal_on_component_interaction::<EditModal>(
-                ctx,
-                mci.clone(),
-                Some(EditModal{
-                    run_name: orig_name.clone(),
-                    squad_size: (orig_size).to_string(),
-                    time: orig_time.clone(),
-                }),
-                None
-            ).await.unwrap().unwrap();
-
-            // update using the data from the modal
-            self.edit_modal_update(data);
-            // update the line-up
-            self.update_number_spots();
-
-            // get the embed
-            let embed = self.make_embed();
-
-            // update the original message
-            msg.edit(
-                ctx,
-                serenity::EditMessage::new()
-                    .embed(embed)
-            ).await.unwrap();
-
-        }
-    }
-
     async fn update_available(&self, emoji_data: EmojiData, user: serenity::User) {
         let mut avail = self.available.lock().unwrap();
 
@@ -280,35 +240,97 @@ impl RunInfo {
             None => {let _ = avail.insert(user, IndexSet::from([emoji_data]));}
         }
     }
+}
 
-    pub async fn handle_class_select(&self, ctx: Context<'_>, classes: &IndexMap<String, EmojiData>) {
-        let mut msg = self.msg.lock().unwrap().clone().unwrap();
-        // list of classes
-        let class_vec = ctx.data().ss_classes.clone().into_keys().collect::<Vec<String>>();
-        
-        while let Some(mci) = serenity::ComponentInteractionCollector::new(ctx)
-            .message_id(msg.id)
-            .custom_ids(class_vec.clone())
-            .await
-        {
-            // get the emoji to add
-            let emoji_data = classes.get(&mci.data.custom_id).expect("Button ID does not match available classes");
-            // update the available classes
-            self.update_available(emoji_data.clone(), mci.user.clone()).await;
 
-            // make the updated embed
-            let embed = self.make_embed();
+pub async fn handle_edit_modal(run: Arc<RunInfo>, ctx: serenity::Context, interaction_id: String) {
+    let mut msg = run.msg.lock().unwrap().clone().unwrap();
+    let orig_name = run.name.lock().unwrap().clone();
+    let orig_size = run.squad_size.lock().unwrap().clone();
+    let orig_time = run.time.lock().unwrap().clone();
+    
+    while let Some(mci) = serenity::ComponentInteractionCollector::new(&ctx)
+        .message_id(msg.id)
+        .custom_ids(vec!["edit_modal".to_string()])
+        .await
+    {
+        // let data = poise::execute_modal_on_component_interaction::<EditModal>(
+        //     &ctx,
+        //     mci.clone(),
+        //     Some(EditModal{
+        //         run_name: orig_name.clone(),
+        //         squad_size: (orig_size).to_string(),
+        //         time: orig_time.clone(),
+        //     }),
+        //     None
+        // ).await.unwrap().unwrap();
+        mci.create_response(
+            EditModal::create(
+                &ctx,
+                Some(EditModal{
+                    run_name: orig_name.clone(),
+                    squad_size: (orig_size).to_string(),
+                    time: orig_time.clone(),
+                })
+            )
+        ).await.unwrap();
 
-            // update the original message
-            msg.edit(
-                ctx,
-                serenity::EditMessage::new()
-                    .embed(embed)
-            ).await.unwrap();
-            mci.create_response(ctx, serenity::CreateInteractionResponse::Acknowledge).await.unwrap();
-        }
+        let response = serenity::collector::ModalInteractionCollector::new(&ctx.shard)
+            .filter(move |d| d.data.custom_id == interaction_str)
+            .timeout(std::time::Duration::from_secs(3600))
+            .await;
+        let response = match response {
+            Some(x) => x,
+            None => return
+        };
+
+        let data = EditModal::parse(response.data.clone()).map_err(serenity::Error::Other).unwrap();
+
+        // update using the data from the modal
+        run.edit_modal_update(data);
+        // update the line-up
+        run.update_number_spots();
+
+        // get the embed
+        let embed = run.make_embed();
+
+        // update the original message
+        msg.edit(
+            &ctx,
+            serenity::EditMessage::new()
+                .embed(embed)
+        ).await.unwrap();
+
     }
+}
 
+
+pub async fn handle_class_select(run: Arc<RunInfo>, ctx: serenity::Context, ctx_data: Data) {
+    let mut msg = run.msg.lock().unwrap().clone().unwrap();
+    // list of classes
+    let class_vec = ctx_data.ss_classes.clone().into_keys().collect::<Vec<String>>();
+    
+    while let Some(mci) = serenity::ComponentInteractionCollector::new(&ctx)
+        .message_id(msg.id)
+        .custom_ids(class_vec.clone())
+        .await
+    {
+        // get the emoji to add
+        let emoji_data = ctx_data.ss_classes.get(&mci.data.custom_id).expect("Button ID does not match available classes");
+        // update the available classes
+        run.update_available(emoji_data.clone(), mci.user.clone()).await;
+
+        // make the updated embed
+        let embed = run.make_embed();
+
+        // update the original message
+        msg.edit(
+            &ctx,
+            serenity::EditMessage::new()
+                .embed(embed)
+        ).await.unwrap();
+        mci.create_response(&ctx, serenity::CreateInteractionResponse::Acknowledge).await.unwrap();
+    }
 }
 
 

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 // use poise::serenity_prelude as serenity;
 
-use crate::runs::RunInfo;
+use crate::runs::{RunInfo, handle_class_select, handle_edit_modal};
 use crate::{Error, Context};
 
 #[poise::command(slash_command)]
@@ -37,15 +37,20 @@ pub async fn schedule(
     // send the message with the sign-up
     run.make_run_msg(ctx, &ctx.data().ss_classes).await;
 
-    let ctx1 = ctx.clone();
-    let ctx2 = ctx.clone();
+    let serenity_ctx1 = ctx.serenity_context().clone();
+    let serenity_ctx2 = ctx.serenity_context().clone();
+    let ctx_data = ctx.data().clone();
+    let interaction_str = ctx.interaction.id.to_string();
+
+    let run1 = run.clone();
+    let run2 = run.clone();
 
     // handle edit modal
     tokio::spawn(async move {
-        run.handle_edit_modal(ctx1).await
+        handle_edit_modal(run1, serenity_ctx1, interaction_str).await
     });
     tokio::spawn(async move {
-        run.handle_class_select(ctx2, &ctx1.data().ss_classes).await
+        handle_class_select(run2, serenity_ctx2, ctx_data).await
     });
 
     Ok(())

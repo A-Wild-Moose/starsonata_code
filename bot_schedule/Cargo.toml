@@ -1,0 +1,19 @@
+[package]
+name = "bot_schedule"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = "0.4.44"
+chrono-tz = "0.10.4"
+collector = "0.0.0"
+config = "0.15.22"
+indexmap = "2.14.0"
+r2d2 = "0.8.10"
+r2d2_sqlite = "0.33.0"
+rusqlite = { version = "0.39.0", features = ["bundled"] }
+serde = "1.0.228"
+serenity = { version = "0.12.5", features = ["collector", "utils"] }
+tokio = { version = "1.49.0", features = ["rt-multi-thread", "signal"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
