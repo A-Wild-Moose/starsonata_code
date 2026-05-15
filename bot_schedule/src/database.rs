@@ -1,12 +1,15 @@
+use std::sync::Arc;
 use std::path::Path;
 use std::fs::{metadata, create_dir_all};
 
 use rusqlite::params;
 use r2d2_sqlite::SqliteConnectionManager;
-// use indexmap::IndexMap;
+use serenity::prelude::TypeMap;
 use serenity::model::user::User;
+use tokio::sync::RwLock;
 use chrono_tz::Tz;
 
+use crate::DbConnection;
 use crate::runs::RunInfo;
 use crate::runs::run_info::JoinMapExt;
 
@@ -53,6 +56,7 @@ pub fn add_update_timezone(pool: &r2d2::Pool<SqliteConnectionManager>, user: &Us
         params![user.id.get() as i64, timezone.name()]
     ).unwrap();
 }
+
 
 pub fn get_timezone(pool: &r2d2::Pool<SqliteConnectionManager>, user: &User) -> Tz {
     let conn = pool.get().unwrap();
