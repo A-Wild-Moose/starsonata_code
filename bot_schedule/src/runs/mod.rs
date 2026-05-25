@@ -8,7 +8,7 @@ pub mod time;
 
 
 #[derive(Debug, Clone)]
-enum OpenOrUser {
+pub enum OpenOrUser {
     Open(String),
     User(User),
 }
@@ -30,7 +30,7 @@ pub struct SpotData {
 }
 
 impl SpotData {
-    fn default() -> Self {
+    pub fn default() -> Self {
         Self {
             user: OpenOrUser::Open("<open>".to_string()),
             emoji: '👤'.into(),

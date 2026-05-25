@@ -4,7 +4,8 @@ use serenity::prelude::*;
 
 // use chrono_tz::Tz;
 
-use crate::{DbConnection, RunData};
+use crate::ClassData;
+use crate::{RunData};
 use crate::runs::RunInfo;
 use crate::database::{get_timezone, insert_update_runinfo};
 
@@ -20,11 +21,7 @@ pub async fn run(ctx: &Context, interaction: &CommandInteraction) -> Result<(), 
         None
     }.expect("Unable to get command options");
 
-    let tz = {
-        let data = ctx.data.read().await;
-        let pool = data.get::<DbConnection>().unwrap();
-        get_timezone(&pool, &interaction.user)
-    };
+    let tz = get_timezone(&ctx.data, &interaction.user).await;
 
     let mut ri = RunInfo::new(interaction, name.to_string(), players, time.to_string(), tz);
 
@@ -38,27 +35,37 @@ pub async fn run(ctx: &Context, interaction: &CommandInteraction) -> Result<(), 
         .await
         .unwrap();
     
+    let class_data = {
+        let data = ctx.data.read().await;
+        data.get::<ClassData>().unwrap().clone()
+    };
+
+    let mut content = CreateMessage::new()
+        .embed(embed)
+        .button(
+            CreateButton::new("edit_button")
+                .emoji('🔨')
+        );
+    for (k, v) in class_data.iter() {
+        content = content.button(
+            CreateButton::new(k)
+                .emoji(EmojiId::new(v.id))
+                .style(ButtonStyle::Secondary)
+        );
+    }
+    
     let msg = interaction
         .channel_id
         .send_message(
             ctx,
-            CreateMessage::new()
-                .embed(embed)
-                .button(
-                    CreateButton::new("edit_button")
-                        .emoji('🔨')
-                )
+            content
         )
         .await
         .unwrap();
     
     ri.set_message_id(msg.clone());
 
-    {
-        let data = ctx.data.read().await;
-        let pool = data.get::<DbConnection>().unwrap();
-        insert_update_runinfo(pool, &ri);
-    }
+    insert_update_runinfo(&ctx.data, &ri).await;
 
     {
         let mut data = ctx.data.write().await;

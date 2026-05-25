@@ -21,6 +21,7 @@ mod commands;
 mod runs;
 mod database;
 mod interactions;
+mod error;
 
 #[derive(serde::Deserialize, Debug)]
 struct ConfigDiscord {
@@ -41,6 +42,11 @@ impl TypeMapKey for DbConnection {
 struct RunData;
 impl TypeMapKey for RunData {
     type Value = IndexMap<u64, runs::RunInfo>;
+}
+
+struct ClassData;
+impl TypeMapKey for ClassData {
+    type Value = IndexMap<String, runs::EmojiData>;
 }
 
 struct Handler;
@@ -71,17 +77,16 @@ impl EventHandler for Handler {
                 }
             }
         } else if let Interaction::Component(component) = interaction {
-            match component.data.custom_id.as_str() {
-                "edit_button" => interactions::edit::handle_edit(&ctx, &component).await,
-                _ => ()
+            let class_data = {
+                let data = ctx.data.read().await;
+                data.get::<ClassData>().unwrap().clone()
+            };
+            let custom_id = component.data.custom_id.clone();
+            if &custom_id == "edit_button" {
+                interactions::edit::handle_edit(&ctx, &component).await;
+            } else if class_data.contains_key(&custom_id) {
+                interactions::update_available::handle_update_available(&ctx, &component).await;
             }
-            // let data = CreateInteractionResponseMessage::new().content(
-            //     format!("Recieved button interaction: {}", component.data.custom_id)
-            // ).ephemeral(true);
-            // let builder = CreateInteractionResponse::Message(data);
-            // if let Err(why) = component.create_response(&ctx.http, builder).await {
-            //     println!("Cannot respond to button interaction: {why}");
-            // }
         }
     }
 
@@ -94,6 +99,13 @@ impl EventHandler for Handler {
                 commands::set_timezone::register(),
             ])
             .await;
+        
+        // add the data on runs
+        let runs_info = database::load_runinfo(&ctx, &ctx.data).await;
+        {
+            let mut data = ctx.data.write().await;
+            data.insert::<RunData>(runs_info);
+        }
     }
 }
 
@@ -116,6 +128,18 @@ async fn main() {
         .unwrap();
     let settings: Arc<ConfigApp> = Arc::new(settings.try_deserialize().unwrap());
 
+    // static stuff
+    let mut ss_classes: IndexMap<String, runs::EmojiData> = IndexMap::with_capacity(8);
+    ss_classes.insert("Speed Demon".to_string(), runs::EmojiData{name: "sd".to_string(), id: 1488700320484823201});
+    ss_classes.insert("Seer".to_string(), runs::EmojiData{name: "seer".to_string(), id: 1488700355888939069});
+    ss_classes.insert("Berserker".to_string(), runs::EmojiData{name: "zerk".to_string(), id: 1488700391548784650});
+    ss_classes.insert("Ranger".to_string(), runs::EmojiData{name: "ranger".to_string(), id: 1488700421676470282});
+    ss_classes.insert("Shield Monkey".to_string(), runs::EmojiData{name: "shm".to_string(), id: 1488700454811734177});
+    ss_classes.insert("Engineer".to_string(), runs::EmojiData{name: "engineer".to_string(), id: 1488700487451803750});
+    ss_classes.insert("Gunner".to_string(), runs::EmojiData{name: "gunner".to_string(), id: 1488700519055626330});
+    ss_classes.insert("Fleet Commander".to_string(), runs::EmojiData{name: "fc".to_string(), id: 1490107303448416370});
+
+
     // Build our client.
     let mut client = Client::builder(&settings.discord.bot_token, GatewayIntents::empty())
         .event_handler(Handler)
@@ -125,7 +149,7 @@ async fn main() {
     {
         let mut data = client.data.write().await;
         data.insert::<DbConnection>(database::get_database("raw/runs.db"));
-        data.insert::<RunData>(IndexMap::with_capacity(10));
+        data.insert::<ClassData>(ss_classes);
     }
     
     // Handle shutdowns gracefully

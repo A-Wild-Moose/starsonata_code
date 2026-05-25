@@ -4,7 +4,6 @@ use serenity::prelude::*;
 
 use chrono_tz::Tz;
 
-use crate::DbConnection;
 use crate::database::add_update_timezone;
 
 
@@ -28,9 +27,7 @@ pub async fn run(ctx: &Context, interaction: &CommandInteraction) -> Result<(), 
     // attempt to parse the result
     let msg = match tz_str.parse::<Tz>() {
         Ok(tz) => {
-            let data = ctx.data.read().await;
-            let pool = data.get::<DbConnection>().unwrap();
-            add_update_timezone(&pool, &interaction.user, &tz);
+            add_update_timezone(&ctx.data, &interaction.user, &tz).await;
 
             format!("Parsed and saved timezone: {}", tz)
         },

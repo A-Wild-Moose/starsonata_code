@@ -3,7 +3,6 @@ use serenity::model::application::CommandInteraction;
 use serenity::model::user::User;
 use serenity::model::channel::Message;
 use serenity::builder::CreateEmbed;
-
 use chrono_tz::Tz;
 
 use crate::runs::{RunInfo, SpotData, EmojiData};
@@ -71,6 +70,19 @@ impl RunInfo {
             available: IndexMap::with_capacity(size),
         }
     }
+
+    // pub fn from_database_row(ctx: &Context, row: &Row<'_>) -> Self {
+    //     Self {
+    //         msg_id: Some(MessageId::new(row.get(0).unwrap().parse::<u64>().unwrap())),
+    //         channel_id: ChannelId::new(row.get(1).unwrap().parse::<u64>().unwrap()),
+    //         guild_id: Some(GuildId::new(row.get(2).unwrap().parse::<u64>().unwrap())),
+    //         organizer: UserId::new(row.get(3).unwrap().parse::<u64>().unwrap()).to_user(ctx),
+    //         name: row.get(4).unwrap(),
+    //         time: row.get(5).unwrap().parse::<i64>().unwrap(),
+    //         size: row.get(6).unwrap().parse::<usize>().unwrap(),
+    //         line_up: row.get(7).unwrap()
+    //     }
+    // }
 
     pub fn make_embed(&self) -> CreateEmbed {
         CreateEmbed::new()
