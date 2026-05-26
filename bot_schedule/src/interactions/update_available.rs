@@ -27,6 +27,9 @@ pub async fn handle_update_available(ctx: &Context, interaction: &ComponentInter
         Some(emoji_set) => {
             if !emoji_set.insert(class_emoji.clone()) {
                 emoji_set.swap_remove(&class_emoji);
+                if emoji_set.len() == 0 {
+                    rinfo.available.swap_remove(&user);
+                }
             }
         },
         None => {
@@ -53,8 +56,6 @@ pub async fn handle_update_available(ctx: &Context, interaction: &ComponentInter
             EditMessage::new()
                 .embed(embed)
         ).await.unwrap();
-
-
 
     // acknowledge interaction
     interaction

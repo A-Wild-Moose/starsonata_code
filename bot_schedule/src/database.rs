@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::fs::{metadata, create_dir_all};
 
-use rusqlite::{params, Params, Row};
+use rusqlite::{params, Row};
 use r2d2_sqlite::SqliteConnectionManager;
 use serenity::prelude::TypeMap;
 use serenity::client::*;
@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 use chrono_tz::Tz;
 use indexmap::{IndexMap, IndexSet};
 
-// use tracing::info;
+use tracing::{error};
 
 use crate::DbConnection;
 use crate::runs::{RunInfo, OpenOrUser, SpotData, EmojiData};
@@ -20,11 +20,14 @@ use crate::runs::run_info::JoinMapExt;
 use crate::error::BotError;
 
 
-async fn parse_line_up(ctx: &Context, s: String) -> IndexMap<usize, SpotData> {
+async fn parse_line_up(ctx: &Context, s: &str) -> IndexMap<usize, SpotData> {
     let mut line_up = IndexMap::with_capacity(10);
 
     for (i, s_spot) in s.split("\n").enumerate() {
-        let (emoji, user) = s_spot.split_once(": ").unwrap();
+        let (emoji, user) = match s_spot.split_once(": ") {
+            None => continue,
+            Some((a, b)) => (a, b)
+        };
         let spot_data = if user == "<open>" {
             SpotData::default()
         } else {
@@ -32,7 +35,7 @@ async fn parse_line_up(ctx: &Context, s: String) -> IndexMap<usize, SpotData> {
             let (_, s_emoji_id) = emoji.rsplit_once(":").unwrap();
             let s_emoji_id = s_emoji_id.replace(">", "");
             SpotData {
-                user: OpenOrUser::User(UserId::new(user.parse::<u64>().unwrap()).to_user(ctx).await.unwrap()),
+                user: OpenOrUser::User(user.parse::<UserId>().unwrap().to_user(ctx).await.unwrap()),
                 emoji: ReactionType::from(EmojiId::new(s_emoji_id.parse::<u64>().unwrap())),
             }
         };
@@ -42,8 +45,32 @@ async fn parse_line_up(ctx: &Context, s: String) -> IndexMap<usize, SpotData> {
 }
 
 
-async fn parse_available(ctx: &Context, s: String) -> IndexMap<User, IndexSet<EmojiData>> {
-    IndexMap::with_capacity(10)
+async fn parse_available(ctx: &Context, s: &str) -> IndexMap<User, IndexSet<EmojiData>> {
+    let mut available = IndexMap::with_capacity(10);
+
+    for s_avail in s.split("\n") {
+        let (s_user, s_classes) = match s_avail.split_once(": ") {
+            Some((a, b)) => (a, b),
+            None => continue,
+        };
+
+        // strip the extra characters off user id, and convert to a user
+        let s_user = s_user.replace(&['<', '>', '@'], "");
+        let user = s_user.parse::<UserId>().unwrap().to_user(ctx).await.unwrap();
+        // extract available classes
+        let mut classes = IndexSet::<EmojiData>::with_capacity(10);
+        for s_class in s_classes.split(">") {
+            let (ename, eid) = match s_class.rsplit_once(":") {
+                Some((a, b)) => (a, b),
+                None => continue,
+            };
+            let ename = ename.replace(&['<', ':'], "");
+
+            classes.insert(EmojiData{name: ename, id: eid.parse::<u64>().unwrap()});
+        }
+        available.insert(user, classes);
+    }
+    available
 }
 
 
@@ -64,7 +91,7 @@ impl DbRunInfo {
     fn from_runinfo(rinfo: &RunInfo) -> Result<Self, BotError> {
         let s_msg_id = match rinfo.msg_id {
             Some(mid) => mid.get().to_string(),
-            None => return Err(BotError::MissingMessageError)
+            None => return Err(BotError::MissingMessageError())
         };
 
         Ok(Self {
@@ -116,7 +143,7 @@ impl DbRunInfo {
         match channel_id.message(ctx, msg_id).await {
             Err(Error::Http(HttpError::UnsuccessfulRequest(req))) => {
                 match req.status_code {
-                    StatusCode::NOT_FOUND => return Err(BotError::MessageNotFoundError(self.msg_id)),
+                    StatusCode::NOT_FOUND => return Err(BotError::MessageNotFoundError(self.msg_id.clone())),
                     _ => {},
                 }
             },
@@ -131,8 +158,8 @@ impl DbRunInfo {
             name: self.name.clone(),
             time: self.time,
             size: self.size as usize,
-            line_up: parse_line_up(ctx, self.line_up).await,
-            available: parse_available(ctx, self.available).await,
+            line_up: parse_line_up(ctx, &self.line_up).await,
+            available: parse_available(ctx, &self.available).await,
         })
     }
 }
@@ -207,7 +234,13 @@ pub async fn insert_update_runinfo(data: &RwLock<TypeMap>, runinfo: &RunInfo) {
     let conn = pool.get().unwrap();
 
     // get the correct types to send to the database
-    let db_runinfo = DbRunInfo::from_runinfo(runinfo);
+    let db_runinfo = match DbRunInfo::from_runinfo(runinfo) {
+        Ok(a) => a,
+        Err(e) => {
+            error!("{}", e);
+            return
+        }
+    };
 
     let _ = conn.execute(
         "INSERT OR REPLACE INTO runs (
@@ -218,27 +251,42 @@ pub async fn insert_update_runinfo(data: &RwLock<TypeMap>, runinfo: &RunInfo) {
 }
 
 
-pub async fn load_runinfo(ctx: &Context, data: &RwLock<TypeMap>) -> IndexMap<u64, RunInfo> {
+pub async fn remove_run(data: &RwLock<TypeMap>, msg_id: &str) {
     let data = data.read().await;
     let pool = data.get::<DbConnection>().unwrap();
     let conn = pool.get().unwrap();
 
+    let mut stmt = conn.prepare("DELETE FROM runs WHERE msg_id = ?").unwrap();
+    stmt.execute(params![msg_id]).unwrap();
+}
+
+
+pub async fn load_runinfo(ctx: &Context, data: &RwLock<TypeMap>) -> IndexMap<u64, RunInfo> {
+    let data_ = data.read().await;
+    let pool = data_.get::<DbConnection>().unwrap();
+    let conn = pool.get().unwrap();
+
     // setup to get the data
-    let mut stmt = conn.prepare("SELECT * FROM runs").unwrap();
-    let res = stmt.query_map([], DbRunInfo::from_row).unwrap();
-    
+    let res: Vec<Result<DbRunInfo, rusqlite::Error>> = {
+        let mut stmt = conn.prepare("SELECT * FROM runs").unwrap();
+        stmt.query_map([], DbRunInfo::from_row).unwrap().collect()
+    };
+
     // return
-    let runs: IndexMap<u64, RunInfo> = IndexMap::with_capacity(10);
+    let mut runs: IndexMap<u64, RunInfo> = IndexMap::with_capacity(10);
 
     // iterate over rows
     for db_ri in res {
         match db_ri {
             Ok(db_runinfo) => {
                 match db_runinfo.to_runinfo(ctx).await {
-                    Ok(runinfo) => {runs.insert(runinfo.msg_id.get(), runinfo);},
-                    Err(_) => {
-                        // delete from the database
-                    }
+                    Ok(runinfo) => {runs.insert(runinfo.msg_id.unwrap().get(), runinfo);},
+                    Err(BotError::MessageNotFoundError(e)) => {
+                        // delete message
+                        remove_run(data, &db_runinfo.msg_id).await;
+                        error!("{}", e);
+                    },
+                    _ => {}
                 }
             },
             _ => {}
