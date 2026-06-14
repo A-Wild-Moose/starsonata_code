@@ -38,8 +38,19 @@ pub async fn handle_edit(ctx: &Context, interaction: &ComponentInteraction) {
     let inputs = &response.inputs;
 
     rinfo.name = inputs[0].clone();
-    rinfo.size = inputs[1].parse::<usize>().unwrap();
+    // rinfo.size = inputs[1].parse::<usize>().unwrap();
+    rinfo.update_size(inputs[1].parse::<usize>().unwrap());
     rinfo.time = get_timestamp(inputs[2].clone(), tz).unwrap();
+
+    // make the embed for updating the message
+    let new_embed = rinfo.make_embed();
+    // update the message
+    rinfo.channel_id.edit_message(
+        ctx,
+        &rinfo.msg_id.unwrap(),
+        EditMessage::new()
+            .embed(new_embed)
+    ).await;
 
     insert_update_runinfo(&ctx.data, &rinfo).await;
     {
