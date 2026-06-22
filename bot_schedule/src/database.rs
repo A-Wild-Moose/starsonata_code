@@ -45,11 +45,11 @@ async fn parse_line_up(ctx: &Context, s: &str) -> IndexMap<usize, SpotData> {
 }
 
 
-async fn parse_available(ctx: &Context, s: &str) -> IndexMap<User, IndexSet<EmojiData>> {
+async fn parse_available(ctx: &Context, s: &str) -> IndexMap<User, IndexMap<String, EmojiData>> {
     let mut available = IndexMap::with_capacity(10);
 
-    for s_avail in s.split("\n") {
-        let (s_user, s_classes) = match s_avail.split_once(": ") {
+    for s_avail in s.split(",") {
+        let (s_user, s_classes) = match s_avail.split_once(":") {
             Some((a, b)) => (a, b),
             None => continue,
         };
@@ -58,15 +58,15 @@ async fn parse_available(ctx: &Context, s: &str) -> IndexMap<User, IndexSet<Emoj
         let s_user = s_user.replace(&['<', '>', '@'], "");
         let user = s_user.parse::<UserId>().unwrap().to_user(ctx).await.unwrap();
         // extract available classes
-        let mut classes = IndexSet::<EmojiData>::with_capacity(10);
-        for s_class in s_classes.split(">") {
-            let (ename, eid) = match s_class.rsplit_once(":") {
-                Some((a, b)) => (a, b),
-                None => continue,
+        let mut classes = IndexMap::<String, EmojiData>::with_capacity(10);
+        for s_class in s_classes.split("|") {
+            let (full_name, ename, eid) = match s_class.split(":").collect::<Vec<&str>>()[..] {
+                [a, b, c] => (a, b, c),
+                _ => continue,
             };
-            let ename = ename.replace(&['<', ':'], "");
+            // let ename = ename.replace(&['<', ':'], "");
 
-            classes.insert(EmojiData{name: ename, id: eid.parse::<u64>().unwrap()});
+            classes.insert(full_name.to_string(), EmojiData{name: ename.to_string(), id: eid.parse::<u64>().unwrap()});
         }
         available.insert(user, classes);
     }
@@ -103,7 +103,7 @@ impl DbRunInfo {
             time: rinfo.time.clone(),
             size: rinfo.size as i64,
             line_up: rinfo.line_up.join(),
-            available: rinfo.available.join(),
+            available: rinfo.available.join_full(),
         })
     }
 

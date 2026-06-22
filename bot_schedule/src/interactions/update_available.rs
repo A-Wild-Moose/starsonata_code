@@ -1,7 +1,7 @@
 use serenity::builder::*;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
-use indexmap::IndexSet;
+use indexmap::IndexMap;
 
 
 use crate::{RunData, ClassData};
@@ -17,24 +17,30 @@ pub async fn handle_update_available(ctx: &Context, interaction: &ComponentInter
         let cdata = data.get::<ClassData>().unwrap().clone();
         (runs.get(&interaction.message.id.get()).unwrap().clone(), cdata)
     };
+    // short var name for full class name
+    let full_name = &interaction.data.custom_id.to_string();
     // get the emoji information for class clicked
-    let class_emoji = class_data.get(&interaction.data.custom_id).unwrap().clone();
+    let class_emoji = class_data.get(full_name).unwrap().clone();
     // get user
     let user = interaction.user.clone();
+    
 
     // handle update/add
     match rinfo.available.get_mut(&user) {
         Some(emoji_set) => {
-            if !emoji_set.insert(class_emoji.clone()) {
-                emoji_set.swap_remove(&class_emoji);
-                if emoji_set.len() == 0 {
-                    rinfo.available.swap_remove(&user);
-                }
+            match emoji_set.insert(full_name.clone(), class_emoji.clone()) {
+                Some(_) => {
+                    emoji_set.swap_remove(full_name);
+                    if emoji_set.len() == 0 {
+                        rinfo.available.swap_remove(&user);
+                    }
+                },
+                None => {}
             }
         },
         None => {
-            let mut iset: IndexSet<EmojiData> = IndexSet::new();
-            iset.insert(class_emoji);
+            let mut iset: IndexMap<String, EmojiData> = IndexMap::new();
+            iset.insert(full_name.clone(), class_emoji);
             let _ = rinfo.available.insert(user, iset);
         }
     }

@@ -56,5 +56,5 @@ pub struct RunInfo {
     pub time: i64,
     pub size: usize,
     pub line_up: IndexMap<usize, SpotData>,
-    pub available: IndexMap<User, IndexSet<EmojiData>>
+    pub available: IndexMap<User, IndexMap<String, EmojiData>>
 }

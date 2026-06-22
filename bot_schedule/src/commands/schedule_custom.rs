@@ -45,6 +45,10 @@ pub async fn run(ctx: &Context, interaction: &CommandInteraction) -> Result<(), 
         .button(
             CreateButton::new("edit_button")
                 .emoji('🔨')
+        )
+        .button(
+            CreateButton::new("assign_spots")
+                .emoji('👥')
         );
     for (k, v) in class_data.iter() {
         content = content.button(

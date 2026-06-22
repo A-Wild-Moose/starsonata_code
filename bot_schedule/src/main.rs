@@ -84,6 +84,8 @@ impl EventHandler for Handler {
             let custom_id = component.data.custom_id.clone();
             if &custom_id == "edit_button" {
                 interactions::edit::handle_edit(&ctx, &component).await;
+            } else if &custom_id == "assign_spots" {
+                interactions::assign_spots::handle_assign_spots(&ctx, &component).await;
             } else if class_data.contains_key(&custom_id) {
                 interactions::update_available::handle_update_available(&ctx, &component).await;
             }

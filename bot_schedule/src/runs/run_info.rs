@@ -9,32 +9,45 @@ use crate::runs::{RunInfo, SpotData, EmojiData};
 use crate::runs::time::get_timestamp;
 
 
-pub trait JoinSetExt {
+pub trait JoinMapExt {
     fn join(&self) -> String;
+    fn join_full(&self) -> String;
 }
 
-impl JoinSetExt for IndexSet<EmojiData> {
+impl JoinMapExt for IndexMap<String, EmojiData> {
     fn join(&self) -> String {
         let mut a = String::from("");
-        for v in self.iter() {
-            a.push_str(format!("<:{}:{}>", v.name, v.id).as_str());
+        for (_, v) in self.iter() {
+            a.push_str(format!("<:{}:{}>", v.name, v.id).as_str())
+        }
+        a
+    }
+
+    fn join_full(&self) -> String {
+        let mut a = String::from("");
+        for (k, v) in self.iter() {
+            a.push_str(format!("{}:{}:{}|", k, v.name, v.id).as_str())
         }
         a
     }
 }
 
-pub trait JoinMapExt {
-    fn join(&self) -> String;
-}
-
 impl<T> JoinMapExt for IndexMap<User, T>
 where
-    T: JoinSetExt
+    T: JoinMapExt
 {
     fn join(&self) -> String {
         let mut a = String::from("");
         for (k, v) in self.iter() {
             a.push_str(format!("{}: {}\n", k, v.join()).as_str());
+        }
+        a
+    }
+
+    fn join_full(&self) -> String {
+        let mut a = String::from("");
+        for (k, v) in self.iter() {
+            a.push_str(format!("{}:{},", k, v.join_full()).as_str());
         }
         a
     }
@@ -47,6 +60,10 @@ impl JoinMapExt for IndexMap<usize, SpotData> {
             a.push_str(format!("{}: {}\n", v.emoji, v.user).as_str())
         }
         a
+    }
+
+    fn join_full(&self) -> String {
+        self.join()
     }
 }
 
