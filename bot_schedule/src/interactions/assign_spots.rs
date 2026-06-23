@@ -3,11 +3,9 @@ use std::time::Duration;
 use serenity::builder::*;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
-use serenity::utils::CreateQuickModal;
 
 use crate::{RunData, ClassData};
-use crate::runs::{EmojiData, SpotData, OpenOrUser};
-use crate::runs::time::{get_timestamp, get_datetime};
+use crate::runs::{SpotData, OpenOrUser};
 use crate::database::insert_update_runinfo;
 
 
@@ -77,11 +75,11 @@ pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteracti
             };
 
             // acknowledge the select menu response
-            &msg_int
+            let _ = &msg_int
             .create_response(
                 ctx,
                 CreateInteractionResponse::Acknowledge
-            ).await;
+            ).await.unwrap();
 
             // edit the interaction response
             interaction.edit_response(
@@ -109,11 +107,11 @@ pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteracti
             );
 
             // acknowledge the select menu response
-            &msg_int
+            let _ = &msg_int
             .create_response(
                 ctx,
                 CreateInteractionResponse::Acknowledge
-            ).await;
+            ).await.unwrap();
             // edit the interaction response
             interaction.edit_response(
                 ctx,
@@ -147,10 +145,10 @@ pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteracti
                 &rinfo.msg_id.unwrap(),
                 EditMessage::new()
                     .embed(new_embed)
-            ).await;
+            ).await.unwrap();
 
             // update the database and memory storage for the run
-            insert_update_runinfo(&ctx, &rinfo).await;
+            insert_update_runinfo(&ctx.data, &rinfo).await;
             {
                 let mut data = ctx.data.write().await;
                 let runs = data.get_mut::<RunData>().unwrap();
@@ -158,11 +156,11 @@ pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteracti
             }
 
             // acknowledge the select menu response
-            &msg_int
+            let _ = &msg_int
             .create_response(
                 ctx,
                 CreateInteractionResponse::Acknowledge
-            ).await;
+            ).await.unwrap();
             // edit the interaction response so that another spot can be assigned
             interaction.edit_response(
                 ctx,
@@ -173,11 +171,11 @@ pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteracti
             .unwrap();
         } else {
             // TODO: update to a message saying interaction not understood
-            &msg_int
+            let _ = &msg_int
             .create_response(
                 ctx,
                 CreateInteractionResponse::Acknowledge
-            ).await;
+            ).await.unwrap();
         }
         
     }

@@ -1,7 +1,7 @@
 use std::sync::{Arc};
 // use std::thread;
 
-use tokio::signal;
+use tokio::{signal, time};
 use tracing_subscriber::{EnvFilter, filter::LevelFilter};
 
 use serenity::async_trait;
@@ -21,6 +21,7 @@ mod commands;
 mod runs;
 mod database;
 mod interactions;
+mod utility;
 mod error;
 
 #[derive(serde::Deserialize, Debug)]
@@ -92,7 +93,7 @@ impl EventHandler for Handler {
         }
     }
 
-    async fn ready(&self, ctx: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, _ready: Ready) {
         let guild_id = GuildId::new(1409517559321071790);
 
         let _ = guild_id
@@ -103,7 +104,7 @@ impl EventHandler for Handler {
             .await;
         
         // add the data on runs
-        let runs_info = database::load_runinfo(&ctx).await;
+        let runs_info = database::load_runinfo(&ctx, &ctx.data).await;
         {
             let mut data = ctx.data.write().await;
             data.insert::<RunData>(runs_info);
@@ -153,6 +154,17 @@ async fn main() {
         data.insert::<DbConnection>(database::get_database("raw/runs.db"));
         data.insert::<ClassData>(ss_classes);
     }
+
+    // setup the running task to handle maintenance
+    let http = client.http.clone();
+    let data = client.data.clone();
+    let _maintenance = tokio::task::spawn(async move {
+        let mut interval = time::interval(time::Duration::from_secs(300));
+        loop {
+            interval.tick().await;
+            utility::maintenance_task::handle_scheduling_maintenance(&http, &data, 300, 3600).await;
+        }
+    });
     
     // Handle shutdowns gracefully
     let shard_manager = client.shard_manager.clone();

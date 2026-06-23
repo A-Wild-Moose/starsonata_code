@@ -1,4 +1,4 @@
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 use serenity::model::application::CommandInteraction;
 use serenity::model::user::User;
 use serenity::model::channel::Message;

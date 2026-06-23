@@ -10,7 +10,7 @@ use crate::database::{get_timezone, insert_update_runinfo};
 
 pub async fn handle_edit(ctx: &Context, interaction: &ComponentInteraction) {
     // try to get the data for the run
-    let tz = get_timezone(&ctx, &interaction.user).await;
+    let tz = get_timezone(&ctx.data, &interaction.user).await;
     let mut rinfo = {
         let data = ctx.data.read().await;
         let runs = data.get::<RunData>().unwrap();
@@ -63,9 +63,9 @@ pub async fn handle_edit(ctx: &Context, interaction: &ComponentInteraction) {
         &rinfo.msg_id.unwrap(),
         EditMessage::new()
             .embed(new_embed)
-    ).await;
+    ).await.unwrap();
 
-    insert_update_runinfo(&ctx, &rinfo).await;
+    insert_update_runinfo(&ctx.data, &rinfo).await;
     {
         let mut data = ctx.data.write().await;
         let runs = data.get_mut::<RunData>().unwrap();
@@ -73,10 +73,10 @@ pub async fn handle_edit(ctx: &Context, interaction: &ComponentInteraction) {
     }
 
     // acknowledge modal responses
-    &response
+    let _ = &response
         .interaction
         .create_response(
             ctx,
             CreateInteractionResponse::Acknowledge
-        ).await;
+        ).await.unwrap();
 }

@@ -1,7 +1,7 @@
 use serenity::model::user::User;
 use serenity::model::id::{ChannelId, GuildId, MessageId};
 use serenity::model::channel::ReactionType;
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 
 pub mod run_info;
 pub mod time;

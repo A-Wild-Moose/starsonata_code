@@ -3,14 +3,14 @@ use std::fs::{metadata, create_dir_all};
 
 use rusqlite::{params, Row};
 use r2d2_sqlite::SqliteConnectionManager;
-use serenity::prelude::TypeMap;
 use serenity::client::*;
 use serenity::model::prelude::*;
 use serenity::Error;
 use serenity::http::{HttpError, StatusCode};
+use serenity::prelude::TypeMap;
 use tokio::sync::RwLock;
 use chrono_tz::Tz;
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 
 use tracing::{error};
 
@@ -199,8 +199,8 @@ pub fn get_database(path: &str) -> r2d2::Pool<SqliteConnectionManager> {
 }
 
 
-pub async fn add_update_timezone(ctx: &Context, user: &User, timezone: &Tz) {
-    let data = ctx.data.read().await;
+pub async fn add_update_timezone(data: &RwLock<TypeMap>, user: &User, timezone: &Tz) {
+    let data = data.read().await;
     let pool = data.get::<DbConnection>().unwrap();
     let conn = pool.get().unwrap();
     let _ = conn.execute(
@@ -211,8 +211,8 @@ pub async fn add_update_timezone(ctx: &Context, user: &User, timezone: &Tz) {
 }
 
 
-pub async fn get_timezone(ctx: &Context, user: &User) -> Tz {
-    let data = ctx.data.read().await;
+pub async fn get_timezone(data: &RwLock<TypeMap>, user: &User) -> Tz {
+    let data = data.read().await;
     let pool = data.get::<DbConnection>().unwrap();
     let conn = pool.get().unwrap();
     let res: Result<String, _> = conn.query_row(
@@ -228,8 +228,8 @@ pub async fn get_timezone(ctx: &Context, user: &User) -> Tz {
 }
 
 
-pub async fn insert_update_runinfo(ctx: &Context, runinfo: &RunInfo) {
-    let data = ctx.data.read().await;
+pub async fn insert_update_runinfo(data: &RwLock<TypeMap>, runinfo: &RunInfo) {
+    let data = data.read().await;
     let pool = data.get::<DbConnection>().unwrap();
     let conn = pool.get().unwrap();
 
@@ -251,8 +251,8 @@ pub async fn insert_update_runinfo(ctx: &Context, runinfo: &RunInfo) {
 }
 
 
-pub async fn remove_run(ctx: &Context, msg_id: &str) {
-    let data = ctx.data.read().await;
+pub async fn remove_run(data: &RwLock<TypeMap>, msg_id: &str) {
+    let data = data.read().await;
     let pool = data.get::<DbConnection>().unwrap();
     let conn = pool.get().unwrap();
 
@@ -261,8 +261,8 @@ pub async fn remove_run(ctx: &Context, msg_id: &str) {
 }
 
 
-pub async fn load_runinfo(ctx: &Context) -> IndexMap<u64, RunInfo> {
-    let data_ = ctx.data.read().await;
+pub async fn load_runinfo(ctx: &Context, data: &RwLock<TypeMap>) -> IndexMap<u64, RunInfo> {
+    let data_ = data.read().await;
     let pool = data_.get::<DbConnection>().unwrap();
     let conn = pool.get().unwrap();
 
@@ -283,7 +283,7 @@ pub async fn load_runinfo(ctx: &Context) -> IndexMap<u64, RunInfo> {
                     Ok(runinfo) => {runs.insert(runinfo.msg_id.unwrap().get(), runinfo);},
                     Err(BotError::MessageNotFoundError(e)) => {
                         // delete message
-                        remove_run(ctx, &db_runinfo.msg_id).await;
+                        remove_run(data, &db_runinfo.msg_id).await;
                         error!("{}", e);
                     },
                     _ => {}
