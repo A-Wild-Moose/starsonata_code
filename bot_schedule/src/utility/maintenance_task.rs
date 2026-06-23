@@ -1,6 +1,4 @@
-use serenity::builder::*;
 use serenity::model::prelude::*;
-use serenity::prelude::*;
 use serenity::Error;
 use serenity::http::{CacheHttp, HttpError, StatusCode};
 use serenity::prelude::TypeMap;

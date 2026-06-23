@@ -65,7 +65,7 @@ pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteracti
     // create base variables to modify/save state
     let mut spot: Option<usize> = None;
     let mut player: Option<User> = None;
-    let mut class_name: Option<String> = None;
+    let mut class_name: Option<String>;
 
     while let Some(msg_int) = msg.await_component_interactions(ctx).timeout(Duration::from_secs(60)).await {
         if &msg_int.data.custom_id == "spot_n" {
@@ -161,6 +161,9 @@ pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteracti
                 ctx,
                 CreateInteractionResponse::Acknowledge
             ).await.unwrap();
+            // reset the stored values
+            spot = None;
+            player = None;
             // edit the interaction response so that another spot can be assigned
             interaction.edit_response(
                 ctx,
@@ -180,76 +183,3 @@ pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteracti
         
     }
 }
-
-
-
-// pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteraction) {
-//     let (rinfo, class_data) = {
-//         let data = ctx.data.read().await;
-//         let runs = data.get::<RunData>().unwrap();
-//         let class_data = data.get::<ClassData>().unwrap();
-//         (runs.get(&interaction.message.id.get()).unwrap().clone(), class_data.clone())
-//     };
-
-//     let msg_content = CreateInteractionResponseMessage::new()
-//         .select_menu(
-//             CreateSelectMenu::new(
-//                 "spot_id",
-//                 CreateSelectMenuKind::String {
-//                     options: (0..rinfo.size).map(|v| CreateSelectMenuOption::new((v+1).to_string(), v.to_string())).collect()
-//                 }
-//             )
-//         )
-//         .select_menu(
-//             CreateSelectMenu::new(
-//                 "player",
-//                 CreateSelectMenuKind::String {
-//                     options: rinfo.available.iter().map(
-//                         |(k, _)| CreateSelectMenuOption::new(k.display_name().to_string(), k.id.get().to_string())
-//                     ).collect()
-//                 }
-//             )
-//         )
-//         .select_menu(
-//             CreateSelectMenu::new(
-//                 "class",
-//                 CreateSelectMenuKind::String {
-//                     options: class_data.iter().map(
-//                         |(k, v)| CreateSelectMenuOption::new(k.to_string(), k.to_string()).emoji(EmojiId::new(v.id))
-//                     ).collect()
-//                 }
-//             )
-//         )
-//         .ephemeral(true);
-    
-//     let _ = interaction.create_response(
-//         ctx,
-//         CreateInteractionResponse::Message(msg_content)
-//     ).await.unwrap();
-
-//     let msg = interaction.get_response(ctx).await.unwrap();
-
-//     while let Some(msg_int) = msg.await_component_interactions(ctx).timeout(Duration::from_secs(60)).await {
-//         println!("test: {:?}", &msg_int.data);
-//         if &msg_int.data.custom_id == "class" {
-//             // check if the user signed up with this class
-
-//             &msg_int
-//             .create_response(
-//                 ctx,
-//                 CreateInteractionResponse::Acknowledge
-//             ).await;
-//         } else {
-//             &msg_int
-//             .create_response(
-//                 ctx,
-//                 CreateInteractionResponse::Acknowledge
-//             ).await;
-//         }
-        
-//     }
-
-//     // msg.delete(ctx).await.unwrap();
-
-//     // let inputs = &response.inputs;
-// }
