@@ -21,7 +21,7 @@ pub async fn run(ctx: &Context, interaction: &CommandInteraction) -> Result<(), 
         None
     }.expect("Unable to get command options");
 
-    let tz = get_timezone(&ctx.data, &interaction.user).await;
+    let tz = get_timezone(&ctx, &interaction.user).await;
 
     let mut ri = RunInfo::new(interaction, name.to_string(), players, time.to_string(), tz);
 
@@ -69,7 +69,7 @@ pub async fn run(ctx: &Context, interaction: &CommandInteraction) -> Result<(), 
     
     ri.set_message_id(msg.clone());
 
-    insert_update_runinfo(&ctx.data, &ri).await;
+    insert_update_runinfo(&ctx, &ri).await;
 
     {
         let mut data = ctx.data.write().await;

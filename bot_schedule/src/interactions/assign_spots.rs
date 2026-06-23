@@ -8,7 +8,7 @@ use serenity::utils::CreateQuickModal;
 use crate::{RunData, ClassData};
 use crate::runs::{EmojiData, SpotData, OpenOrUser};
 use crate::runs::time::{get_timestamp, get_datetime};
-use crate::database::{get_timezone, insert_update_runinfo};
+use crate::database::insert_update_runinfo;
 
 
 
@@ -19,6 +19,19 @@ pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteracti
         let class_data = data.get::<ClassData>().unwrap();
         (runs.get(&interaction.message.id.get()).unwrap().clone(), class_data.clone())
     };
+
+    // check that this user has permission to edit
+    if interaction.user != rinfo.organizer {
+        let _ = interaction.create_response(
+            ctx,
+            CreateInteractionResponse::Message(
+                CreateInteractionResponseMessage::new()
+                    .content("Only the organizer can assign run spots.")
+                    .ephemeral(true)
+            )
+        ).await.unwrap();
+        return
+    }
 
     // setup the select menus
     let menu_spot = CreateSelectMenu::new(
@@ -110,18 +123,20 @@ pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteracti
             ).await
             .unwrap();
         } else if &msg_int.data.custom_id == "class" {
-            println!("test: {:?}", &msg_int.data);
             class_name = match &msg_int.data.kind {
                 ComponentInteractionDataKind::StringSelect{values: a} => Some(a[0].to_string()),
                 _ => None
             };
+
+            // get the class data
+            let edata = class_data.get(&class_name.unwrap()).unwrap();
 
             // update the lineup
             rinfo.line_up.insert(
                 spot.unwrap(),
                 SpotData{
                     user: OpenOrUser::User(player.clone().unwrap()),
-                    emoji: ReactionType::Custom{animated: false, id: EmojiId::new(class_data.get(&class_name.unwrap()).unwrap().id), name: None}
+                    emoji: ReactionType::Custom{animated: false, id: EmojiId::new(edata.id), name: Some(edata.name.clone())}
                 }
             );
             // make the embed for updating the message
@@ -135,7 +150,7 @@ pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteracti
             ).await;
 
             // update the database and memory storage for the run
-            insert_update_runinfo(&ctx.data, &rinfo).await;
+            insert_update_runinfo(&ctx, &rinfo).await;
             {
                 let mut data = ctx.data.write().await;
                 let runs = data.get_mut::<RunData>().unwrap();
@@ -148,6 +163,14 @@ pub async fn handle_assign_spots(ctx: &Context, interaction: &ComponentInteracti
                 ctx,
                 CreateInteractionResponse::Acknowledge
             ).await;
+            // edit the interaction response so that another spot can be assigned
+            interaction.edit_response(
+                ctx,
+                EditInteractionResponse::new()
+                    .content(base_msg.clone())
+                    .select_menu(menu_spot.clone())
+            ).await
+            .unwrap();
         } else {
             // TODO: update to a message saying interaction not understood
             &msg_int

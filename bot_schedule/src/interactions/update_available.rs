@@ -46,7 +46,7 @@ pub async fn handle_update_available(ctx: &Context, interaction: &ComponentInter
     }
 
     // update the embed and stored info
-    insert_update_runinfo(&ctx.data, &rinfo).await;
+    insert_update_runinfo(&ctx, &rinfo).await;
     let embed = rinfo.make_embed();
     {
         let mut data = ctx.data.write().await;

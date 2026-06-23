@@ -103,7 +103,7 @@ impl EventHandler for Handler {
             .await;
         
         // add the data on runs
-        let runs_info = database::load_runinfo(&ctx, &ctx.data).await;
+        let runs_info = database::load_runinfo(&ctx).await;
         {
             let mut data = ctx.data.write().await;
             data.insert::<RunData>(runs_info);

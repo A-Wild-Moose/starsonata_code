@@ -10,12 +10,25 @@ use crate::database::{get_timezone, insert_update_runinfo};
 
 pub async fn handle_edit(ctx: &Context, interaction: &ComponentInteraction) {
     // try to get the data for the run
-    let tz = get_timezone(&ctx.data, &interaction.user).await;
+    let tz = get_timezone(&ctx, &interaction.user).await;
     let mut rinfo = {
         let data = ctx.data.read().await;
         let runs = data.get::<RunData>().unwrap();
         runs.get(&interaction.message.id.get()).unwrap().clone()
     };
+    // check that this user has permission to edit
+    if interaction.user != rinfo.organizer {
+        let _ = interaction.create_response(
+            ctx,
+            CreateInteractionResponse::Message(
+                CreateInteractionResponseMessage::new()
+                    .content("Only the organizer can assign run spots.")
+                    .ephemeral(true)
+            )
+        ).await.unwrap();
+        return
+    }
+
     // get the datetime for the edit
     let dt = get_datetime(rinfo.time, tz);
 
@@ -52,7 +65,7 @@ pub async fn handle_edit(ctx: &Context, interaction: &ComponentInteraction) {
             .embed(new_embed)
     ).await;
 
-    insert_update_runinfo(&ctx.data, &rinfo).await;
+    insert_update_runinfo(&ctx, &rinfo).await;
     {
         let mut data = ctx.data.write().await;
         let runs = data.get_mut::<RunData>().unwrap();

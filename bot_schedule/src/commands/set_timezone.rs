@@ -27,7 +27,7 @@ pub async fn run(ctx: &Context, interaction: &CommandInteraction) -> Result<(), 
     // attempt to parse the result
     let msg = match tz_str.parse::<Tz>() {
         Ok(tz) => {
-            add_update_timezone(&ctx.data, &interaction.user, &tz).await;
+            add_update_timezone(&ctx, &interaction.user, &tz).await;
 
             format!("Parsed and saved timezone: {}", tz)
         },
